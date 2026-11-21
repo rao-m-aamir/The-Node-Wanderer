@@ -2,7 +2,7 @@
 
 A small 2D platformer for learning linked lists, written in C++17 with Raylib 5.5.
 Every platform is a real `Node` allocated with `new` and owned by a linked list.
-The player moves along the list's links, and the inspector (Tab) reads those same links.
+The player moves along the list's links, and the field journal (Tab) reads those same links.
 
 ## Build and run (Windows, MSVC)
 
@@ -24,29 +24,35 @@ When the game exits, the console prints `Nodes still allocated at shutdown: 0`, 
 | Move | A / D or Left / Right |
 | Jump | Space |
 | Interact / continue a message | E or Enter |
-| Toggle node inspector | Tab |
+| Toggle the field journal (the node inspector) | Tab |
 | Pause / resume | Escape (Q quits while paused) |
 
 ## The four regions
 
-1. **Singly linked list:** follow `next` from the head to the tail. Going backward fails, because no `previous` link is stored.
-2. **Doubly linked list:** go forward to N4, use `previous` to go back to N2, then continue to the tail.
-3. **Circular singly linked list:** the tail's portal is `tail->next`, which leads to the head. Go around the loop once. The traversal stops when `current == start`, or at a safety limit of 12 steps.
-4. **NULL pointer hazards:** N3's `next` is `nullptr`, shown as an amber gap with a broken bridge. Open the inspector and press E on N3. The game checks the pointer and calls `append()`, which creates a new node N4 across the gap. Jump onto it to reach the exit.
+1. **The First Connection (singly linked list):** a forest. Follow `next` from the head to the tail. Going backward fails, because no `previous` link is stored.
+2. **The Forgotten Return (doubly linked list):** flooded ruins. Take the key from N4 (Key Shrine), carry its light back to N2 (Old Hall) through `previous` to light the brazier, then continue to the tail.
+3. **The Endless Garden (circular singly linked list):** a moonlit garden. The hollow in the tail's root is `tail->next`; walking into it, a great root carries you back to the head. Go around once: the traversal stops when `current == start`, or at a safety limit of 12 steps.
+4. **The Edge of Nothing (NULL pointer safety):** cliffs above an abyss. N3's `next` is `nullptr`, so past its edge there is only an amber glow and snapped ropes. Open the journal and press E on N3: the game checks the pointer and calls `append()`, and the bridge N4 assembles from the new node.
 
-## Visual design
+## Visual guide
 
-Region 1 is the polished vertical slice. It is drawn into a 640x360 pixel canvas that is scaled up 2x, so the scenery, the ledges and the traveler share one pixel size. All art is drawn in code with Raylib shapes; there are no image assets.
+The whole world is drawn into a 640x360 pixel canvas that is scaled up 2x, so the scenery, the platforms, the traveler, and the effects share one pixel size. All art is drawn in code with Raylib shapes; there are no image assets.
 
-- **Ledges are natural forms:** a grassy cliff, a mossy boulder, a fallen log, an old ruin and an arch cliff. Each one is drawn only from its node's position and width, and its look is chosen from the node's ID. The world has no node boxes, labels or pointer arrows.
-- **The links are taught through movement:**
-  - The ledge that `current->next` points to glows softly.
-  - A firefly near the traveler drifts toward it.
-  - Ledges that are not solid right now fade into mist, including the ones behind you, because a singly list has no way back.
-- **Interface:** a small top-left card shows the region and the objective. A top-right row of pips shows the list walked from the head: gold is the current node, filled pips are visited, and the row ends at `NULL`. The code line (`current = current->next;`), the inspector (Tab) and short message cards explain the pointers.
-- **Feedback:** landing on a new node kicks up leaves and light, the checkpoint lantern lights up with sparks, and the exit arch is blocked by vines until the objective is done.
-
-Regions 2-4 still use the earlier diagram-style look (platform badges and link arrows). They share the new traveler sprite and interface. The camera stays inside the active region.
+- **Platforms are natural forms that fit each place:** forest cliffs, a mossy boulder, a fallen log; ruined masonry, a broken arch, a column capital, a shrine, old stairs; a garden terrace, a moon-cap mushroom, a planter, a root knot; rock cliffs and the rebuilt rope bridge. Each one is drawn only from its node's position and width, and its look is chosen from the node's ID. The top row of every platform matches its collision exactly; roots, moss, and supports only hang below. There are no node boxes, labels, or pointer arrows in the world.
+- **Links are taught through movement and light:**
+  - Warm light rises from the platform that `current->next` points to.
+  - In Region 2, cool light falls on the platform that `current->previous` points to.
+  - A small light near the traveler drifts toward the link to follow.
+  - Platforms that are not solid right now fade into mist.
+  - Region 3's great root runs from the real tail to the node its `next` points to.
+- **Each region has its own palette and light:** golden forest afternoon, blue-hour ruins with braziers, a violet night garden with a glowing spring, and cold cliffs before dawn. Fixing the NULL link in Region 4 brings the dawn.
+- **Depth:** every region has far, middle, and near layers, mist between them, and a soft vignette. Near layers stay below and beside the route.
+- **The traveler:** a 14x24-pixel explorer with a hat, a red scarf, a backpack, and a lantern. They have idle breathing, a two-step walk, a jump stretch, falling and landing poses, and a contact shadow.
+- **Feedback:** dust when jumping and landing, leaves, chips, or petals when arriving on a new node, sparks when a checkpoint lantern lights, light gathering back into the traveler after a fall, and a fade with the region's name between regions.
+- **Interface:**
+  - Small dark cards in play: the region and objective (top left), the list as marks walked from the head (top right), the last line of pointer code, and the controls.
+  - The current node is always a gold diamond, and NULL always has a stop mark, so color is never the only cue.
+  - Reading happens in an explorer's field journal: the inspector, the notes (each kind has its own mark), the pause cover, and the final summary.
 
 ## Where to find things
 
@@ -54,10 +60,13 @@ Regions 2-4 still use the earlier diagram-style look (platform badges and link a
 | --- | --- |
 | `Node` definition | `src/Node.h` |
 | List operations (`append`, `clear`) | `src/SinglyLinkedList.cpp`, `src/DoublyLinkedList.cpp`, `src/CircularSinglyLinkedList.cpp` |
-| Region setup, link checks, Traversal Rule A (`isPlatformSolid`), Regions 2-4 platform and link drawing | `src/World.cpp` |
-| Region 1 forest art: ledges, exit arch, lantern, background and foreground layers | `src/ForestArt.cpp` |
-| Which renderer draws the active region, the firefly hint, the progress pips | `src/GameScene.cpp` |
+| Region setup, link checks, Traversal Rule A (`isPlatformSolid`) | `src/World.cpp` |
+| Player-to-node traversal (`resolveLandings`, `followLink`), objectives, recovery, transitions | `src/Game.cpp` |
+| Keyboard input, read once per frame | `src/Input.h` |
 | Player movement and the traveler pixel sprite | `src/Player.cpp` |
-| Player-to-node traversal (`resolveLandings`, `followLink`), objectives, recovery, HUD, inspector | `src/Game.cpp` |
-| Region colors | `src/Theme.h` |
-| Regions 2-4 background scenery (decoration only) | `src/Scenery.cpp` |
+| How a frame of the world is drawn, and the wisp hint | `src/GameScene.cpp` |
+| HUD, field journal (inspector), notes, pause, summary | `src/GameUi.cpp` |
+| Shared art helpers: platform outlines, materials, mist, link glows, lanterns | `src/ArtCommon.h`, `src/ArtCommon.cpp` |
+| Region art (platforms from nodes, plus decoration) | `src/ForestArt.cpp`, `src/RuinsArt.cpp`, `src/GardenArt.cpp`, `src/EdgeArt.cpp` |
+| Particles (dust, leaves, sparks) | `src/Effects.cpp` |
+| Interface colors | `src/Theme.h` |

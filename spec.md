@@ -47,18 +47,19 @@ Keep the implementation beginner-readable, with explicit pointer changes and cle
 ## Resolved implementation decisions
 
 - **Traversal Rule A (link-gated solidity):** a platform is solid only if it is the current node, `current->next`, or (doubly list only) `current->previous`. Landing on a solid platform other than the current one sets `current` to it. One function, `isPlatformSolid` in `World.cpp`, is used by both collision and drawing. Platforms are one-way: the player lands on them only from above.
-- **Circular wrap:** a portal on the tail of Region 3 is the visible form of `tail->next`. Walking into it reads `tail->next` and moves the player to the head. Region 3 fits on one screen and the camera frames all of it, so the return arc to the head stays visible.
-- **Region transitions:** each region ends at a gate that unlocks when its objective is complete. A gate is not a pointer. It sets `current = nextList.getHead()`, and the lists are never linked to each other.
-- **Region 4:** a singly list N1 → N2 → N3, with `N3->next == nullptr` and a red hazard gap after N3. With the inspector open, pressing E on N3 runs `if (current->next == nullptr)` and then calls `append()`, which creates N4 "Bridge". The list owns the bridge node, so `clear()` frees it. No node is ever faked.
-- **Inspector:** shows every node in the active list, walking from the head, plus details for the current node. It has no separate selection mechanism.
+- **Circular wrap:** a root hollow on the tail of Region 3 is the visible form of `tail->next`. Walking into it reads `tail->next`, a short passage carries the traveler along a great root that is drawn from the real tail to the node its `next` points to, and then the link is followed. Region 3 fits on one screen and the camera frames all of it.
+- **Region transitions:** each region ends at an exit (arch, doorway, moon gate, dawn gate) that opens when its objective is complete. An exit is not a pointer. The screen fades, shows the next region's name, and sets `current = nextList.getHead()`; the lists are never linked to each other.
+- **Region 2 puzzle:** reaching N4 takes the key's light, which the traveler carries back through `previous` to N2, where it lights a brazier. These are visual responses to objective steps, not extra links.
+- **Region 4:** a singly list N1 → N2 → N3, with `N3->next == nullptr` and an amber hazard gap after N3. With the journal open, pressing E on N3 runs `if (current->next == nullptr)` and then calls `append()`, which creates N4 "Bridge" right at N3's edge. The bridge is drawn from that new node and assembles over about 1.6 seconds. The list owns the bridge node, so `clear()` frees it. No node is ever faked.
+- **Inspector:** a field journal that shows the current node's real `next` (and `previous` in Region 2), then the whole active list walked from the head. It has no separate selection mechanism.
 - **Checkpoints:** the checkpoint starts at the region head and moves to the current node at each objective step. Region 3 always restarts from the head, and its loop counter resets on a fall.
 - **Checkpoint prompts:** shown as a question page followed by an answer page.
 - **Replay:** clears the non-owning pointers, clears all lists, and rebuilds the stage.
 - **Escape:** `SetExitKey(KEY_NULL)` makes Escape pause the game. Q quits.
 - **Memory check:** a live-node counter, `g_liveNodeCount`, is printed at shutdown and must be 0.
 - **Build:** CMake with `FetchContent` for Raylib 5.5, C++17. The project lives in the workspace root, not a `node-wanderer/` subfolder.
-- **Visual pass:** follows `design-reference-guide.md` using Raylib shapes only (no image assets). Colors live in `Theme.h`, and decoration lives in `Scenery.cpp`, which never reads a list.
-- **Region 1 vertical slice:** natural forest art drawn into a 640x360 pixel canvas scaled 2x (`ForestArt.cpp`). Ledges are natural forms drawn from node position and width, with no labels or arrows in the world. The valid `next` ledge glows and a firefly points toward it, and ledges that are not solid fade into mist. Regions 2-4 keep the diagram-style look until the style is extended to them. The camera stays within the active region.
+- **Art:** Raylib shapes only (no image assets), drawn into a 640x360 pixel canvas scaled 2x for every region. Each region has its own art file (`ForestArt.cpp`, `RuinsArt.cpp`, `GardenArt.cpp`, `EdgeArt.cpp`). Platforms are natural forms drawn only from node position and width; decoration has its own data and never becomes a platform. The world has no labels or pointer arrows: the next platform glows (and, in Region 2, previous glows cool), platforms that are not solid fade into mist, and the details live in the journal. The camera stays within the active region.
+- **Input:** the keyboard is read once per frame into an `InputFrame` (`Input.h`), which gameplay receives as plain values.
 
 ## Gameplay loop
 

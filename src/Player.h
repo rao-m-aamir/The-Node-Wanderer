@@ -31,8 +31,9 @@ Rectangle getPlayerRect(const Player& player);
 // Puts the player on top of a node's platform (does not change currentNode).
 void placePlayerOnPlatform(Player& player, const Node& node);
 
-// Reads input, applies gravity, and moves the player. Collisions happen in Game.
-void updatePlayerMovement(Player& player, const PhysicsSettings& settings, float dt);
+// Applies one frame of input (move: -1..1, jump pressed), gravity, and motion.
+// Collisions happen in Game.
+void updatePlayerMovement(Player& player, const PhysicsSettings& settings, float move, bool jumpPressed, float dt);
 
 // Draws the traveler pixel sprite (idle, walk, jump, fall, and landing poses).
 // `feet` is the point between the feet in the target's coordinates, and `pixel`

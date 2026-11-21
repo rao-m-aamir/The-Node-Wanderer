@@ -2,6 +2,7 @@
 
 #include "raylib.h"
 #include "Game.h"
+#include "Input.h"
 
 int main() {
     SetConfigFlags(FLAG_VSYNC_HINT | FLAG_MSAA_4X_HINT);
@@ -18,7 +19,7 @@ int main() {
                 dt = 1.0f / 30.0f; // avoid falling through platforms after a stall
             }
 
-            game.update(dt);
+            game.update(readKeyboard(), dt);
 
             BeginDrawing();
             game.draw();

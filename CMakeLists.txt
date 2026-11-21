@@ -19,10 +19,15 @@ add_executable(NodeWanderer
     src/main.cpp
     src/Game.cpp
     src/GameScene.cpp
+    src/GameUi.cpp
     src/Player.cpp
+    src/Effects.cpp
     src/World.cpp
-    src/Scenery.cpp
+    src/ArtCommon.cpp
     src/ForestArt.cpp
+    src/RuinsArt.cpp
+    src/GardenArt.cpp
+    src/EdgeArt.cpp
     src/SinglyLinkedList.cpp
     src/DoublyLinkedList.cpp
     src/CircularSinglyLinkedList.cpp

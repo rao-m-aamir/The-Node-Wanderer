@@ -2,44 +2,53 @@
 
 #include <cmath>
 
+#include "ArtCommon.h"
 #include "rlgl.h"
-#include "Scenery.h"
-#include "Theme.h"
 
-// Which renderer draws the active region. Region 1 uses the natural forest art,
-// drawn into a small pixel canvas; Regions 2-4 still use the classic look.
-// Both read the same real nodes: nothing here creates or links nodes.
+// Draws the world: every region goes through the same pixel canvas in the same order
+// (background, platforms, effects, traveler, foreground). The region art reads the
+// same real nodes that gameplay uses; nothing here creates or links nodes.
 
-void Game::drawForestScene() const {
-    const int cameraX = (int)std::floor(camera.target.x / CANVAS_SCALE);
-
-    BeginTextureMode(forestCanvas);
-    ClearBackground(BLACK);
-    drawForestBackground(cameraX, elapsed);
-
-    ForestView view;
-    view.cameraX = cameraX;
-    view.head = world.getHead(0);
+SceneView Game::makeSceneView() const {
+    const RegionInfo& region = world.getRegion(regionIndex);
+    SceneView view;
+    view.region = regionIndex;
+    view.cameraX = (int)std::floor(camera.target.x / CANVAS_SCALE);
+    view.scroll = view.cameraX - (int)std::floor(region.left / CANVAS_SCALE);
+    view.head = world.getHead(regionIndex);
     view.current = player.currentNode;
     view.checkpoint = checkpointNode;
     view.mistById = ledgeMist;
-    view.hasGate = world.getGateRect(0, view.gateRect);
+    view.kind = region.kind;
+    view.hasGate = world.getGateRect(regionIndex, view.gateRect);
     view.gateOpen = gateOpen;
     view.checkpointFlash = (checkpointPulse.timer > 0.0f) ? checkpointPulse.timer / checkpointPulse.duration : 0.0f;
     view.time = elapsed;
-    drawForestLedges(view);
+    view.stage = stage;
+    view.emphasizePrevious = regionIndex == 1 && stage == 1 && !gateOpen;
+    view.portalRect = world.getPortalRect();
+    view.passage = (passageTimer >= 0.0f) ? std::fmin(1.0f, passageTimer / PASSAGE_SECONDS) : -1.0f;
+    view.bridgeBuilt = world.isBridgeBuilt();
+    view.bridgeProgress = view.bridgeBuilt ? std::fmin(1.0f, bridgeTimer / BRIDGE_BUILD_SECONDS) : 0.0f;
+    view.hazardZone = world.getNullHazardZone();
+    view.playerFeet = Vector2{(float)toCanvasX(player.position.x + player.size.x / 2.0f, view.cameraX),
+                              (float)toCanvasY(player.position.y + player.size.y)};
+    return view;
+}
 
-    // Leaves and light where the player just arrived.
-    if (arrivalPulse.timer > 0.0f && arrivalPulse.duration > 0.0f) {
-        Vector2 at = {(float)toCanvasX(arrivalPulse.position.x, cameraX), (float)toCanvasY(arrivalPulse.position.y)};
-        drawArrivalBurst(at, 1.0f - arrivalPulse.timer / arrivalPulse.duration);
+void Game::drawScene() const {
+    SceneView view = makeSceneView();
+
+    BeginTextureMode(sceneCanvas);
+    ClearBackground(BLACK);
+    drawRegionBackground(view);
+    drawRegionPlatforms(view);
+    drawParticles(particles, view.cameraX);
+    if (passageTimer < 0.0f) { // inside the root, the traveler is the moving light instead
+        drawTraveler(player, elapsed, view.playerFeet, 1.0f);
+        drawWispHint(view);
     }
-
-    Vector2 feet = {(float)toCanvasX(player.position.x + player.size.x / 2.0f, cameraX),
-                    (float)toCanvasY(player.position.y + player.size.y)};
-    drawTraveler(player, elapsed, feet, 1.0f);
-    drawWispHint(cameraX, feet);
-    drawForestForeground(cameraX, elapsed);
+    drawRegionForeground(view);
     EndTextureMode();
 
     // Scale the canvas up 2x. Blending is off for this copy: the canvas is a finished
@@ -48,59 +57,43 @@ void Game::drawForestScene() const {
     rlDisableColorBlend();
     Rectangle source = {0.0f, 0.0f, (float)CANVAS_WIDTH, -(float)CANVAS_HEIGHT}; // render textures are stored upside down
     Rectangle dest = {0.0f, 0.0f, (float)SCREEN_WIDTH, (float)SCREEN_HEIGHT};
-    DrawTexturePro(forestCanvas.texture, source, dest, Vector2{0.0f, 0.0f}, 0.0f, WHITE);
+    DrawTexturePro(sceneCanvas.texture, source, dest, Vector2{0.0f, 0.0f}, 0.0f, WHITE);
     rlDrawRenderBatchActive();
     rlEnableColorBlend();
 }
 
-void Game::drawClassicScene() const {
-    drawBackdrop(world, camera.target.x, elapsed); // decoration, screen space
-
-    BeginMode2D(camera);
-    WorldView view;
-    view.activeRegion = regionIndex;
-    view.currentNode = player.currentNode;
-    view.checkpointNode = checkpointNode;
-    view.visitedIds = visitedIds;
-    view.gateOpen = gateOpen;
-    view.showAllLinks = inspectorOpen;
-    view.emphasizePrevious = regionIndex == 1 && stage == 1 && !gateOpen;
-    view.time = elapsed;
-    world.draw(view); // platforms and links, read from the real lists
-
-    drawPulse(checkpointPulse);
-    drawPulse(arrivalPulse);
-    // The same traveler sprite as Region 1, with each sprite pixel 2 world pixels wide.
-    Vector2 feet = {std::floor((player.position.x + player.size.x / 2.0f) / 2.0f) * 2.0f,
-                    std::floor((player.position.y + player.size.y) / 2.0f) * 2.0f};
-    drawTraveler(player, elapsed, feet, 2.0f);
-    drawInteractionPrompt();
-    EndMode2D();
-
-    drawForeground(world, camera.target.x, elapsed);
-}
-
-// A firefly near the traveler drifts toward the ledge current->next points to, then back.
-// When the tail is reached (next == NULL) it points at the open exit instead.
-void Game::drawWispHint(int cameraX, Vector2 feet) const {
+// A small light near the traveler drifts toward the platform a link points to, then back.
+// Warm for next. In Region 2, while carrying the light back, it is cool and points to previous.
+// At a tail (next == NULL) it points to the open exit instead, if there is one.
+void Game::drawWispHint(const SceneView& view) const {
     if (state != GameState::Playing) {
         return;
     }
     const Node* current = player.currentNode;
+    if (current == nullptr) {
+        return;
+    }
     Vector2 target;
-    if (current != nullptr && current->next != nullptr) { // null check before following the link
-        const Node* next = current->next;
-        target = Vector2{(float)toCanvasX(next->platformPosition.x + next->platformWidth / 2.0f, cameraX),
-                         (float)toCanvasY(next->platformPosition.y) - 8.0f};
-    } else if (gateOpen) {
-        Rectangle gate;
-        if (!world.getGateRect(regionIndex, gate)) return;
-        target = Vector2{(float)toCanvasX(gate.x + gate.width / 2.0f, cameraX), (float)toCanvasY(gate.y + gate.height / 2.0f)};
+    Color color = WARM_LIGHT;
+    const Node* toward = current->next; // checked for NULL below
+    if (view.emphasizePrevious && current->previous != nullptr) {
+        toward = current->previous;
+        color = COOL_LIGHT;
+    }
+    if (regionIndex == 2 && toward == view.head && toward != current) {
+        return; // the tail's way back is the root hollow, which already glows
+    }
+    if (toward != nullptr) {
+        target = Vector2{(float)toCanvasX(toward->platformPosition.x + toward->platformWidth / 2.0f, view.cameraX),
+                         (float)toCanvasY(toward->platformPosition.y) - 8.0f};
+    } else if (gateOpen && view.hasGate) {
+        target = Vector2{(float)toCanvasX(view.gateRect.x + view.gateRect.width / 2.0f, view.cameraX),
+                         (float)toCanvasY(view.gateRect.y + view.gateRect.height / 2.0f)};
     } else {
         return; // nowhere to point
     }
 
-    Vector2 start = {feet.x + player.facing * 7.0f, feet.y - 30.0f};
+    Vector2 start = {view.playerFeet.x + player.facing * 7.0f, view.playerFeet.y - 30.0f};
     float dx = target.x - start.x;
     float dy = target.y - start.y;
     float distance = std::sqrt(dx * dx + dy * dy);
@@ -111,63 +104,6 @@ void Game::drawWispHint(int cameraX, Vector2 feet) const {
         float travel = 0.5f - 0.5f * std::cos(t * 1.6f);
         Vector2 point = {start.x + dx / distance * reach * travel,
                          start.y + dy / distance * reach * travel + std::sin(t * 4.0f) * 2.0f};
-        drawForestWisp(point, (i == 0) ? 1.0f : 0.35f / i, elapsed);
-    }
-}
-
-// Top-right HUD: the active list as small pips, walked from head through the real next links.
-// Current node = gold, visited = filled, not visited yet = hollow. The end shows NULL or the loop.
-void Game::drawProgressPill() const {
-    const RegionTheme& theme = REGION_THEMES[regionIndex];
-    Node* head = world.getHead(regionIndex);
-
-    int count = 0;
-    bool loops = false;
-    Node* node = head;
-    while (node != nullptr && count < MAX_NODES_PER_REGION) {
-        count++;
-        node = node->next;
-        if (node == head) {
-            loops = true; // circular list: the walk stops when it is back at the head
-            break;
-        }
-    }
-
-    const float pipGap = 18.0f;
-    const char* endLabel = loops ? "BACK TO HEAD" : "NULL";
-    const char* steps = TextFormat("STEPS %d / MAX %d   STOP WHEN current == N1", loopSteps, MAX_LOOP_STEPS);
-    float width = 28.0f + MeasureText("HEAD", 10) + 10.0f + count * pipGap + 4.0f + MeasureText(endLabel, 10);
-    if (regionIndex == 2 && width < MeasureText(steps, 10) + 28.0f) width = MeasureText(steps, 10) + 28.0f;
-    float height = (regionIndex == 2) ? 46.0f : 30.0f;
-    Rectangle card = {SCREEN_WIDTH - 12.0f - width, 10.0f, width, height};
-    DrawRectangleRounded(card, 0.3f, 6, Fade(UI_NAVY, 0.78f));
-
-    float x = card.x + 14.0f;
-    float y = card.y + 15.0f;
-    DrawText("HEAD", (int)x, (int)y - 4, 10, UI_DIM_TEXT);
-    x += MeasureText("HEAD", 10) + 10.0f;
-
-    node = head;
-    for (int i = 0; i < count && node != nullptr; i++) {
-        Vector2 pip = {x + i * pipGap + 4.0f, y};
-        if (i + 1 < count) { // the link to the next node
-            DrawLineEx(Vector2{pip.x + 6.0f, y}, Vector2{pip.x + pipGap - 6.0f, y}, 1.0f, Fade(UI_DIM_TEXT, 0.6f));
-        }
-        bool visited = node->id >= 0 && node->id <= MAX_NODES_PER_REGION && visitedIds[node->id];
-        if (node == player.currentNode) {
-            DrawCircleV(pip, 5.0f, CURRENT_GOLD);
-            DrawRing(pip, 6.5f, 7.5f, 0.0f, 360.0f, 20, Fade(CURRENT_GOLD, 0.6f));
-        } else if (visited) {
-            DrawCircleV(pip, 3.5f, theme.accent);
-        } else {
-            DrawRing(pip, 2.5f, 4.0f, 0.0f, 360.0f, 16, Fade(UI_DIM_TEXT, 0.9f));
-        }
-        node = node->next;
-    }
-    x += count * pipGap;
-    DrawText(endLabel, (int)x, (int)y - 4, 10, loops ? theme.accent : NULL_AMBER);
-
-    if (regionIndex == 2) {
-        DrawText(steps, (int)card.x + 14, (int)card.y + 30, 10, UI_DIM_TEXT);
+        drawWisp(point, (i == 0) ? 1.0f : 0.35f / i, color, elapsed);
     }
 }

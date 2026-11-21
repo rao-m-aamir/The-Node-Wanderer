@@ -20,24 +20,13 @@ constexpr float WORLD_KILL_Y = 760.0f; // falling below this line triggers recov
 // Fixed description of one region. This is UI and layout data only:
 // the platforms and their links live in the region's owning list.
 struct RegionInfo {
-    const char* title;
+    const char* placeName; // e.g. "The First Connection"
+    const char* title;     // the data structure it teaches
     ListKind kind;
     float left;
     float right;
     Node* gateNode;  // NON-OWNING: the node the exit gate stands on (nullptr = no gate yet)
     bool gateOnLeft; // gate on the left or right end of that platform
-};
-
-// What the renderer needs from gameplay. Read-only, non-owning pointers only.
-struct WorldView {
-    int activeRegion;
-    const Node* currentNode;
-    const Node* checkpointNode;
-    const bool* visitedIds;  // visitedIds[node id] for the active region (progress, not links)
-    bool gateOpen;
-    bool showAllLinks;       // inspector open: show every stored link more clearly
-    bool emphasizePrevious;  // Region 2 puzzle step that uses previous
-    float time;
 };
 
 // TRAVERSAL RULE A (link-gated solidity):
@@ -64,7 +53,7 @@ public:
     Node* getHead(int regionIndex) const;
     const RegionInfo& getRegion(int regionIndex) const;
 
-    // Region 3: the tail of the circular list and the portal that shows tail->next.
+    // Region 3: the tail of the circular list and the root hollow that follows tail->next.
     Node* getLoopTail() const;
     Rectangle getPortalRect() const;
 
@@ -76,17 +65,8 @@ public:
     // Returns false if the region has no gate yet.
     bool getGateRect(int regionIndex, Rectangle& outRect) const;
 
-    // Draws platforms, links, gates, portal, and hazard (world coordinates).
-    void draw(const WorldView& view) const;
-
 private:
     void verifyLinks() const;
-    void drawRegionLinks(int regionIndex, const WorldView& view) const;
-    void drawRegionPlatforms(int regionIndex, const WorldView& view) const;
-    void drawNullHazard(const WorldView& view) const;
-    void drawLoopPortal(const WorldView& view) const;
-    void drawGates(const WorldView& view) const;
-    void drawCheckpointAndCurrentMarkers(const WorldView& view) const;
 
     // The four owning lists. Every platform in the game is a node in one of these.
     SinglyLinkedList forwardList;       // Region 1

@@ -14,10 +14,8 @@ void placePlayerOnPlatform(Player& player, const Node& node) {
     player.grounded = true;
 }
 
-void updatePlayerMovement(Player& player, const PhysicsSettings& settings, float dt) {
-    float direction = 0.0f;
-    if (IsKeyDown(KEY_A) || IsKeyDown(KEY_LEFT)) direction -= 1.0f;
-    if (IsKeyDown(KEY_D) || IsKeyDown(KEY_RIGHT)) direction += 1.0f;
+void updatePlayerMovement(Player& player, const PhysicsSettings& settings, float move, bool jumpPressed, float dt) {
+    float direction = move;
 
     player.velocity.x = direction * settings.moveSpeed;
     if (direction != 0.0f) {
@@ -25,7 +23,7 @@ void updatePlayerMovement(Player& player, const PhysicsSettings& settings, float
     }
 
     // Jump only from the ground: no second jump while airborne.
-    if (player.grounded && IsKeyPressed(KEY_SPACE)) {
+    if (player.grounded && jumpPressed) {
         player.velocity.y = -settings.jumpImpulse;
         player.grounded = false;
     }
@@ -97,6 +95,15 @@ const char* const LEGS_STRIDE[6] = {
     "oppo....oppo",
     "offo....offo",
     "oooo....oooo",
+};
+
+const char* const LEGS_STRIDE_LIFT[6] = { // the other step: the front boot lifts off the ground
+    "...oppppppo.",
+    "..oppo.oppo.",
+    ".oppo..oppo.",
+    "oppo...offo.",
+    "offo...oooo.",
+    "oooo........",
 };
 
 const char* const LEGS_JUMP[4] = { // legs tucked while rising
@@ -210,14 +217,17 @@ void drawTraveler(const Player& player, float time, Vector2 feet, float pixel) {
         legRows = rising ? 4 : 5;
         lanternLift = rising ? -1 : -2;
         scarfDroop = rising ? 0.7f : -0.5f;
+        if (player.velocity.y < -450.0f) bob = -1; // a little stretch right after take-off
     } else if (player.landTimer > 0.0f) {
         legs = LEGS_LAND;
         legRows = 3;
         lanternLift = 1;
     } else if (player.velocity.x != 0.0f) {
         int frame = (int)(player.walkPhase / 1.5708f) % 4;
-        if (frame == 0 || frame == 2) {
+        if (frame == 0) {
             legs = LEGS_STRIDE;
+        } else if (frame == 2) {
+            legs = LEGS_STRIDE_LIFT;
         } else {
             bob = -1; // passing pose: body one pixel higher
         }
@@ -245,6 +255,9 @@ void drawTraveler(const Player& player, float time, Vector2 feet, float pixel) {
     float flicker = 0.85f + 0.15f * std::sin(time * 13.0f) * std::sin(time * 7.0f);
     DrawCircleGradient((int)glowX, (int)glowY, 15.0f * pixel, Fade(LANTERN_LIGHT, 0.24f * flicker),
                        Fade(LANTERN_LIGHT, 0.0f));
+    if (player.grounded) { // a soft contact shadow on the ground under the feet
+        DrawRectangle((int)(feet.x - 6.0f * pixel), (int)feet.y, (int)(12.0f * pixel), (int)pixel, Fade(BLACK, 0.35f));
+    }
 
     drawScarfTail(box, bodyTop, scarfDroop, time);
     drawPart(legs, legRows, 0, legsTop, box, false);

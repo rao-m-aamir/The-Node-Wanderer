@@ -2,46 +2,40 @@
 
 #include "raylib.h"
 
-// Colors only. No gameplay or list data lives here.
+// Interface colors. Colors only: no gameplay or list data lives here.
 
-// Per-region palette: scenery, platform material, and accent.
-struct RegionTheme {
-    Color skyTop;
-    Color skyHorizon;
-    Color farHills;     // distant silhouettes
-    Color midScenery;   // mid-distance props (trees, pillars, mushrooms, ruins)
-    Color accent;       // region accent: UI badge, reachable link, platform trim
-    Color platformTop;  // walkable top edge
-    Color platformBody;
-    Color platformDark; // underside
-    Color light;        // warm environmental light
+// Each region's accent: `accent` for text on dark cards, `ink` for writing on journal paper.
+struct RegionStyle {
+    Color accent;
+    Color ink;
 };
 
-inline const RegionTheme REGION_THEMES[4] = {
-    // Region 1: leafy forest (singly linked)
-    {{22, 34, 54, 255}, {72, 98, 92, 255}, {40, 66, 70, 255}, {26, 50, 46, 255},
-     {130, 220, 110, 255}, {120, 200, 90, 255}, {120, 86, 58, 255}, {74, 52, 38, 255}, {255, 214, 140, 255}},
-    // Region 2: cool stone and water (doubly linked)
-    {{16, 30, 58, 255}, {58, 94, 128, 255}, {40, 64, 98, 255}, {28, 46, 76, 255},
-     {110, 200, 255, 255}, {176, 200, 220, 255}, {98, 112, 134, 255}, {60, 68, 88, 255}, {200, 230, 255, 255}},
-    // Region 3: violet bioluminescent grove (circular)
-    {{26, 18, 50, 255}, {86, 58, 116, 255}, {58, 40, 90, 255}, {42, 28, 70, 255},
-     {200, 130, 255, 255}, {200, 150, 255, 255}, {92, 62, 128, 255}, {56, 36, 84, 255}, {170, 255, 230, 255}},
-    // Region 4: amber warning ruins (NULL safety)
-    {{32, 22, 30, 255}, {116, 72, 50, 255}, {72, 46, 44, 255}, {52, 34, 36, 255},
-     {255, 186, 70, 255}, {230, 190, 120, 255}, {116, 90, 70, 255}, {70, 52, 44, 255}, {255, 200, 120, 255}},
+inline const RegionStyle REGION_STYLES[4] = {
+    {{150, 220, 110, 255}, {46, 108, 52, 255}},  // Region 1: forest green
+    {{130, 190, 255, 255}, {40, 82, 150, 255}},  // Region 2: moonlit blue
+    {{190, 160, 255, 255}, {98, 64, 160, 255}},  // Region 3: garden violet
+    {{255, 186, 80, 255}, {158, 94, 18, 255}},   // Region 4: dawn amber
 };
 
-// Shared UI and state colors. The navy leans slightly green so it sits well in the forest.
+// Dark cards for the in-play HUD (they lean slightly green so they sit well in every scene).
 inline const Color UI_NAVY = {10, 20, 28, 255};
 inline const Color UI_TEXT = {236, 238, 248, 255};
 inline const Color UI_DIM_TEXT = {150, 156, 180, 255};
 inline const Color OBJECTIVE_YELLOW = {255, 222, 120, 255};
 inline const Color CURRENT_GOLD = {255, 205, 70, 255};
-inline const Color PREVIOUS_ORANGE = {255, 160, 90, 255};
 inline const Color NULL_AMBER = {255, 176, 50, 255};
 inline const Color CHECKPOINT_CREAM = {255, 240, 200, 255};
 inline const Color OUTLINE_DARK = {14, 12, 24, 255};
+
+// The explorer's field journal (inspector, notes, pause, and the final summary).
+inline const Color PARCHMENT = {238, 224, 192, 255};
+inline const Color PARCHMENT_SHADE = {212, 192, 152, 255};
+inline const Color INK = {48, 36, 30, 255};
+inline const Color INK_SOFT = {112, 90, 72, 255};
+inline const Color INK_NULL = {168, 60, 30, 255}; // NULL is always written in this red-brown, with a stop mark
+inline const Color LEATHER = {86, 52, 38, 255};
+inline const Color LEATHER_DARK = {54, 32, 24, 255};
+inline const Color GILT = {222, 186, 110, 255};
 
 inline Color lerpColor(Color a, Color b, float t) {
     if (t < 0.0f) t = 0.0f;
