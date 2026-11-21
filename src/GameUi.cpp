@@ -158,6 +158,17 @@ void Game::draw() const {
     ClearBackground(BLACK);
     drawScene();
 
+    // The interface for play sits under the fades, so it fades out and in with the scene
+    // instead of switching to the next region's HUD while the screen is black.
+    if (state != GameState::Complete) {
+        drawHud();
+        if (inspectorOpen) drawInspector();
+        drawToast();
+        drawInteractionPrompt();
+        if (state == GameState::Playing) drawControlsStrip();
+        if (state == GameState::Message) drawMessageBox();
+    }
+
     if (fadeTimer > 0.0f) {
         DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, Fade(BLACK, fadeTimer / RECOVERY_FADE_SECONDS));
     }
@@ -172,13 +183,7 @@ void Game::draw() const {
         return;
     }
 
-    drawHud();
-    drawTitleCard();
-    if (inspectorOpen) drawInspector();
-    drawToast();
-    drawInteractionPrompt();
-    if (state == GameState::Playing) drawControlsStrip();
-    if (state == GameState::Message) drawMessageBox();
+    drawTitleCard(); // the region's name rises over the fade-in
     if (state == GameState::Paused) drawPauseScreen();
 }
 
@@ -598,6 +603,7 @@ void Game::showMessage(std::vector<std::string> newPages, NoteKind kind) {
     pageKinds.assign(pages.size(), kind);
     pageIndex = 0;
     state = pages.empty() ? GameState::Playing : GameState::Message;
+    if (!pages.empty()) stopPlayerPose();
 }
 
 void Game::showToast(const std::string& text, float seconds) {

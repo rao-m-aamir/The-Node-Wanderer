@@ -38,7 +38,16 @@ struct SceneView {
     float bridgeProgress;   // Region 4: 0 -> 1 while the new bridge assembles
     Rectangle hazardZone;   // Region 4: the NULL gap (world coordinates)
     Vector2 playerFeet;     // the traveler's feet, canvas coordinates (for things that follow the player)
+    float gateProgress;     // 0 while the exit is closed, then 0 -> 1 as it opens
+    float stageTime;        // seconds since the objective step changed (eases in relic, brazier, repair)
+    float nodeTime;         // seconds since the player arrived on the current node (eases in link glows)
 };
+
+// 0 -> 1 with a gentle start and end, for easing state changes in the art.
+inline float smooth01(float t) {
+    t = (t < 0.0f) ? 0.0f : ((t > 1.0f) ? 1.0f : t);
+    return t * t * (3.0f - 2.0f * t);
+}
 
 // Far and middle scenery (decoration only).
 void drawRegionBackground(const SceneView& view);

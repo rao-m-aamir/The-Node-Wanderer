@@ -60,12 +60,14 @@ The build uses MSVC, CMake, and Ninja on Windows.
 Open a "Developer PowerShell for VS" (or run `VsDevCmd.bat`), then:
 
 ```powershell
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 .\build\NodeWanderer.exe
 ```
 
 The first configure step downloads Raylib, so it needs an internet connection.
+The result is one self-contained executable: Raylib and the MSVC runtime are linked into `NodeWanderer.exe`, so it runs on another Windows PC without installing anything.
+For a debug build, where a failed link check also stops the program, use `-DCMAKE_BUILD_TYPE=Debug`.
 
 | Action | Keys |
 | --- | --- |
@@ -138,7 +140,8 @@ The whole world is drawn into a 640x360 pixel canvas that is scaled up 2x, so th
 - **Platforms are natural forms that fit each place:** forest cliffs, a mossy boulder, a fallen log; ruined masonry, a broken arch, a column capital, a shrine, old stairs; a garden terrace, a moon-cap mushroom, a planter, a root knot; rock cliffs and the rebuilt rope bridge. Each one is drawn only from its node's position and width, and its look is chosen from the node's ID. The top row of every platform matches its collision exactly. There are no node boxes, labels, or pointer arrows in the world.
 - **Each region has its own palette and light:** golden forest afternoon, blue-hour ruins with braziers, a violet night garden with a glowing spring, and cold cliffs before dawn. Fixing the NULL link in Region 4 brings the dawn.
 - **Depth:** every region has far, middle, and near layers, mist between them, and a soft vignette. Near layers stay below and beside the route.
-- **The traveler:** a 14x24-pixel explorer with a hat, a red scarf, a backpack, and a lantern, with idle breathing, a two-step walk, a jump stretch, falling and landing poses, and a contact shadow.
+- **The traveler:** a 14x24-pixel explorer with a hat, a red scarf, a backpack, and a lantern, with idle breathing, a two-step walk, a jump stretch, falling and landing poses, and a contact shadow. The scarf streams and flutters with movement, and the lantern sways.
+- **Motion everywhere:** tree crowns, vines, roots, banners, and grass sway; leaves and petals tumble as they fall; water shimmers and reflects firelight. Exits open over a moment (vines fall away, a slab sinks, wisteria parts, dawn fills the stones), Region 2's brazier catches with a flare when the key's light flies into it, and Region 4's bridge is laid plank by plank from N3's edge.
 - **Feedback:** dust when jumping and landing; leaves, chips, or petals when arriving on a new node; sparks when a checkpoint lantern lights; light gathering back into the traveler after a fall; and a fade with the region's name between regions.
 - **Interface:** small dark cards in play (the region and objective, the list as marks walked from the head, the last line of pointer code, and the controls), and an explorer's field journal for reading: the inspector, the notes, the pause cover, and the final summary.
 

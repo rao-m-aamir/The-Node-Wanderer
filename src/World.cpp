@@ -63,8 +63,13 @@ void World::build() {
     // The gap after it is the NULL hazard. The player fixes it later with append().
     nullList.append(1, "Lookout",   Vector2{5090.0f, 480.0f}, 260.0f);
     nullList.append(2, "Rope Post", Vector2{5460.0f, 450.0f}, 230.0f);
-    nullList.append(3, "Edge",      Vector2{5800.0f, 450.0f}, 240.0f);
+    Node* edge = nullList.append(3, "Edge", Vector2{5800.0f, 450.0f}, 240.0f);
     bridgeBuilt = false;
+    // The gap is measured now, from the tail whose next is NULL. It keeps its place after the
+    // repair, so the art can fade it out while the bridge assembles over it.
+    float gapStart = edge->platformPosition.x + edge->platformWidth;
+    nullGap = Rectangle{gapStart + 10.0f, edge->platformPosition.y + 10.0f,
+                        BRIDGE_POSITION.x + BRIDGE_WIDTH - gapStart - 10.0f, WORLD_KILL_Y - edge->platformPosition.y};
 
     regions[0] = RegionInfo{"The First Connection", "Singly Linked List", ListKind::Singly, 0.0f, 1800.0f,
                             forwardTail, false};
@@ -186,18 +191,7 @@ Rectangle World::getPortalRect() const {
 // The NULL gap starts at the right edge of Region 4's tail (the node whose next is nullptr)
 // and ends where the bridge node will be placed.
 Rectangle World::getNullHazardZone() const {
-    Node* tail = nullList.getHead();
-    int steps = 0;
-    while (tail != nullptr && tail->next != nullptr && steps < MAX_NODES_PER_REGION) {
-        tail = tail->next;
-        steps++;
-    }
-    if (tail == nullptr) {
-        return Rectangle{0, 0, 0, 0};
-    }
-    float gapStart = tail->platformPosition.x + tail->platformWidth;
-    return Rectangle{gapStart + 10.0f, tail->platformPosition.y + 10.0f,
-                     BRIDGE_POSITION.x + BRIDGE_WIDTH - gapStart - 10.0f, WORLD_KILL_Y - tail->platformPosition.y};
+    return nullGap; // collision with it is only checked while the bridge is not built (Game.cpp)
 }
 
 bool World::isBridgeBuilt() const {

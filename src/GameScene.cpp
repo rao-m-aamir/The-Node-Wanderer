@@ -33,6 +33,9 @@ SceneView Game::makeSceneView() const {
     view.hazardZone = world.getNullHazardZone();
     view.playerFeet = Vector2{(float)toCanvasX(player.position.x + player.size.x / 2.0f, view.cameraX),
                               (float)toCanvasY(player.position.y + player.size.y)};
+    view.gateProgress = gateOpen ? std::fmin(1.0f, gateTimer / GATE_OPEN_SECONDS) : 0.0f;
+    view.stageTime = stageTimer;
+    view.nodeTime = nodeTimer;
     return view;
 }
 

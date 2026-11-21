@@ -50,6 +50,14 @@ void Game::resetStage() {
     bridgeTimer = 0.0f;
     clearParticles(particles);
 
+    // Leftovers from the summary screen: a fade still running, an old toast, a lantern flash.
+    transitionTarget = -1;
+    transitionTimer = 0.0f;
+    transitionSwitched = false;
+    toastText.clear();
+    toastTimer = 0.0f;
+    checkpointPulse = {};
+
     world.clearAll();
     world.build();
 
@@ -62,7 +70,10 @@ void Game::resetStage() {
 void Game::enterRegion(int index) {
     regionIndex = index;
     stage = 0;
+    stageTimer = 0.0f;
     gateOpen = false;
+    gateTimer = 0.0f;
+    nodeTimer = 0.0f;
     loopSteps = 0;
     for (bool& visited : visitedIds) {
         visited = false;
@@ -136,7 +147,9 @@ void Game::startTransition(int target) {
 
 void Game::completeRegionObjective(const std::string& question, const std::string& answer) {
     gateOpen = true;
-    setCheckpoint(player.currentNode);
+    gateTimer = 0.0f;
+    setCheckpoint(player.currentNode, true); // the lantern flashes even when it is already here (Region 3: N1)
+    stopPlayerPose();
     pages = {question, answer};
     pageKinds = {NoteKind::Question, NoteKind::Answer};
     pageIndex = 0;
@@ -148,12 +161,22 @@ void Game::completeRegionObjective(const std::string& question, const std::strin
 // ---------------------------------------------------------------------------
 
 void Game::update(const InputFrame& input, float dt) {
+    // Paused: the world and all of its clocks stand still until Esc resumes.
+    if (state == GameState::Paused) {
+        if (input.pause) state = stateBeforePause;
+        if (input.quit) quitRequested = true;
+        return;
+    }
+
     elapsed += dt;
     if (toastTimer > 0.0f) toastTimer -= dt;
     if (fadeTimer > 0.0f) fadeTimer -= dt;
     if (titleCardTimer > 0.0f) titleCardTimer -= dt;
     if (checkpointPulse.timer > 0.0f) checkpointPulse.timer -= dt;
     if (world.isBridgeBuilt()) bridgeTimer += dt;
+    if (gateOpen) gateTimer += dt;
+    stageTimer += dt;
+    nodeTimer += dt;
     updateParticles(particles, dt);
     updateLedgeMist(dt);
 
@@ -170,6 +193,7 @@ void Game::update(const InputFrame& input, float dt) {
             } else {
                 state = GameState::Complete;
             }
+            return; // a key pressed on this frame belonged to the old screen, not the new note or summary
         }
         if (transitionTimer >= TRANSITION_OUT_SECONDS + TRANSITION_IN_SECONDS) {
             transitionTarget = -1;
@@ -183,9 +207,7 @@ void Game::update(const InputFrame& input, float dt) {
 
     switch (state) {
         case GameState::Paused:
-            if (input.pause) state = stateBeforePause;
-            if (input.quit) quitRequested = true;
-            break;
+            break; // handled at the top
 
         case GameState::Complete:
             if (input.replay) resetStage();
@@ -353,6 +375,7 @@ void Game::followLink(Node* destination) {
     }
 
     player.currentNode = destination;
+    nodeTimer = 0.0f;
     markVisited(destination);
     spawnArrivalEffects(viaPrevious);
 
@@ -362,8 +385,8 @@ void Game::followLink(Node* destination) {
         showToast(TextFormat("%s   N%d -> N%d", code, from->id, destination->id));
     }
 
-    if (regionIndex == 2) {
-        loopSteps++;
+    if (regionIndex == 2 && !gateOpen) {
+        loopSteps++; // only the first trip around counts; the stop condition already fired after that
     }
     checkObjectives();
 }
@@ -407,14 +430,14 @@ void Game::checkObjectives() {
 
         case 1:
             if (stage == 0 && current->id == 4) {
-                stage = 1; // the key's light now travels with the player
+                setStage(1); // the key's light now travels with the player
                 setCheckpoint(current);
                 spawnBurst(particles, Vector2{current->platformPosition.x + current->platformWidth / 2.0f,
                                               current->platformPosition.y - 44.0f},
                            16, Color{214, 176, 96, 255}, COOL_LIGHT, 90.0f, 30.0f, 0.9f);
                 showToast("You took the key's light. Carry it back to N2 through previous.", 4.0f);
             } else if (stage == 1 && current->id == 2) {
-                stage = 2; // the light kindles the Old Hall's brazier
+                setStage(2); // the light kindles the Old Hall's brazier
                 setCheckpoint(current);
                 spawnBurst(particles, Vector2{current->platformPosition.x + current->platformWidth - 20.0f,
                                               current->platformPosition.y - 18.0f},
@@ -451,7 +474,7 @@ void Game::checkObjectives() {
 
         case 3:
             if (stage == 0 && current->id == 3) {
-                stage = 1;
+                setStage(1);
                 setCheckpoint(current);
                 showToast("You are on N3 (Edge). Open the journal (Tab) and read N3->next.", 4.0f);
             } else if (stage == 2 && current->id == 4) {
@@ -474,8 +497,8 @@ void Game::tryBuildBridge() {
         return;
     }
     Node* current = player.currentNode;
-    if (current == nullptr || current->id != 3) {
-        showToast("Stand on N3 (Edge) to repair its link.");
+    if (current == nullptr || current->id != 3 || !player.grounded) {
+        showToast("Stand on N3 (Edge) to repair its link."); // not while jumping or falling past the edge
         return;
     }
     if (!inspectorOpen) {
@@ -486,7 +509,7 @@ void Game::tryBuildBridge() {
     // Read the pointer before following it.
     if (current->next == nullptr) {
         Node* bridge = world.appendBridgeNode(); // append() allocates N4 and sets N3->next = N4
-        stage = 2;
+        setStage(2);
         bridgeTimer = 0.0f;
         if (bridge != nullptr) {
             spawnBurst(particles, Vector2{bridge->platformPosition.x + 20.0f, bridge->platformPosition.y}, 16,
@@ -503,12 +526,19 @@ void Game::tryBuildBridge() {
 void Game::recoverFromFall(bool movedBackward) {
     int fromId = (player.currentNode != nullptr) ? player.currentNode->id : 0;
 
-    if (regionIndex == 2) {
-        loopSteps = 0; // the loop must start again from the head
+    // Region 3: a fall during the first trip around restarts the traversal from the head.
+    // Once the stop condition has fired, the loop is done and a fall is an ordinary one.
+    bool restartLoop = regionIndex == 2 && !gateOpen;
+    if (restartLoop) {
+        loopSteps = 0;
         checkpointNode = loopStartNode;
+        for (bool& visited : visitedIds) {
+            visited = false; // the walk starts again, so its marks do too
+        }
     }
     restoreToCheckpoint();
     int checkpointId = (player.currentNode != nullptr) ? player.currentNode->id : 0;
+    markVisited(player.currentNode);
 
     std::vector<std::string> recoveryPages;
     if (regionIndex == 0 && movedBackward) {
@@ -525,7 +555,7 @@ void Game::recoverFromFall(bool movedBackward) {
             "Only your current node and the nodes its links point to are solid.");
     }
 
-    if (regionIndex == 2) {
+    if (restartLoop) {
         recoveryPages.push_back(TextFormat("Recovery: back at the start N%d. Loop steps reset to 0.", checkpointId));
     } else {
         recoveryPages.push_back(TextFormat("Recovery: you are back at the lantern on N%d.", checkpointId));
@@ -561,14 +591,25 @@ void Game::restoreToCheckpoint() {
     spawnGather(particles, Vector2{player.position.x + player.size.x / 2.0f, player.position.y + 24.0f}, 16, WARM_LIGHT);
 }
 
-void Game::setCheckpoint(Node* node) {
-    if (node == nullptr || node == checkpointNode) {
+void Game::setCheckpoint(Node* node, bool flashIfSame) {
+    if (node == nullptr || (node == checkpointNode && !flashIfSame)) {
         return;
     }
     checkpointNode = node;
     checkpointPulse = Pulse{Vector2{node->platformPosition.x, node->platformPosition.y}, 0.8f, 0.8f};
     spawnBurst(particles, Vector2{node->platformPosition.x + 22.0f, node->platformPosition.y - 26.0f}, 12, WARM_LIGHT,
                CHECKPOINT_CREAM, 60.0f, -10.0f, 0.9f);
+}
+
+void Game::setStage(int newStage) {
+    stage = newStage;
+    stageTimer = 0.0f; // lets the art ease in what the new step changes (brazier, relic, repair)
+}
+
+void Game::stopPlayerPose() {
+    // Movement only updates in play. Without this the walk or landing pose would stay frozen under the note.
+    player.velocity.x = 0.0f;
+    player.landTimer = 0.0f;
 }
 
 void Game::markVisited(const Node* node) {

@@ -23,6 +23,7 @@ constexpr float TRANSITION_IN_SECONDS = 0.9f;
 constexpr float TITLE_CARD_SECONDS = 2.6f;
 constexpr float PASSAGE_SECONDS = 1.1f;      // Region 3: travelling through the root
 constexpr float BRIDGE_BUILD_SECONDS = 1.6f; // Region 4: the new bridge assembling
+constexpr float GATE_OPEN_SECONDS = 1.2f;    // an exit opening once its objective is done
 
 enum class GameState { Playing, Message, Paused, Complete };
 
@@ -66,7 +67,9 @@ private:
     void recoverFromFall(bool movedBackward);
     void recoverFromNullHazard();
     void restoreToCheckpoint();
-    void setCheckpoint(Node* node);
+    void setCheckpoint(Node* node, bool flashIfSame = false);
+    void setStage(int newStage);
+    void stopPlayerPose(); // a note is opening: settle the traveler into the idle pose
     void markVisited(const Node* node);
     void updateLedgeMist(float dt); // dt <= 0 snaps instantly
     void updateCamera(float dt);    // dt <= 0 snaps the camera
@@ -132,6 +135,9 @@ private:
     float fadeTimer = 0.0f;        // > 0 while fading in after a recovery or at the start
     float passageTimer = -1.0f;    // >= 0 while the Region 3 root passage plays
     float bridgeTimer = 0.0f;      // seconds since the Region 4 bridge node was appended
+    float gateTimer = 0.0f;        // seconds since the region's exit opened (animation only)
+    float stageTimer = 0.0f;       // seconds since the objective step last changed (animation only)
+    float nodeTimer = 0.0f;        // seconds since the player arrived on the current node (animation only)
     int transitionTarget = -1;     // >= 0 while fading to another region
     float transitionTimer = 0.0f;
     bool transitionSwitched = false;

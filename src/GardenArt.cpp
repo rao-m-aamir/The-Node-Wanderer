@@ -176,9 +176,13 @@ void drawGardenDetails(GardenShape shape, const Ledge& l, const Silhouette& s, f
             paintRows(s, 8, 9, STONE_SHADE, 3);
             for (int x = x0 + 8; x < x1 - 8; x += 6) DrawRectangle(x, l.top + 11, 3, 2, STONE_LIGHT); // carved band
             paintRows(s, 20, 24, STONE_LIGHT, 0);
-            for (int i = 0; i < 4; i++) { // trailing vines over the rim
+            for (int i = 0; i < 4; i++) { // trailing vines over the rim, swaying from where they hang
                 int x = x0 + 4 + i * (l.width - 8) / 3;
-                for (int k = 0; k < 8 + i * 4; k++) DrawRectangle(x + (int)std::round(std::sin(time + k * 0.3f + i)), l.top + 2 + k, 1, 1, MOSS_DARK);
+                int length = 8 + i * 4;
+                for (int k = 0; k < length; k++) {
+                    int sway = (int)std::round(std::sin(time + i * 1.3f + k * 0.15f) * (k / (float)length) * 1.8f);
+                    DrawRectangle(x + sway, l.top + 2 + k, 1, 1, MOSS_DARK);
+                }
             }
             drawBlossoms(l, 10, time);
             break;
@@ -295,7 +299,7 @@ void drawGreatRoot(const RootPath& path, const SceneView& view) {
     }
 }
 
-// The hollow at the tail end of the root. It glows when the player stands on the tail.
+// The hollow at the tail end of the root. It glows more as the player comes near (ready = on the tail).
 void drawRootHollow(Rectangle portal, const SceneView& view, bool ready) {
     int px = toCanvasX(portal.x, view.cameraX);
     int py = toCanvasY(portal.y);
@@ -303,16 +307,17 @@ void drawRootHollow(Rectangle portal, const SceneView& view, bool ready) {
     int ph = (int)(portal.height / CANVAS_SCALE);
     Vector2 center = {(float)(px + pw / 2), (float)(py + ph / 2 + 2)};
     float pulse = 0.5f + 0.5f * std::sin(view.time * 3.0f);
-    DrawCircleGradient((int)center.x, (int)center.y, ready ? 34.0f : 20.0f, withAlpha(SPRING, ready ? 0.35f : 0.12f),
+    float closeness = ready ? smooth01(1.0f - std::fabs(view.playerFeet.x - center.x) / 90.0f) * 0.7f + 0.3f : 0.0f;
+    DrawCircleGradient((int)center.x, (int)center.y, 20.0f + 14.0f * closeness, withAlpha(SPRING, 0.12f + 0.23f * closeness),
                        withAlpha(SPRING, 0.0f));
     DrawEllipse((int)center.x, (int)center.y, 7.0f, 16.0f, DARK);
-    DrawEllipse((int)center.x, (int)center.y + 2, 5.0f, 12.0f, withAlpha(SPRING, ready ? 0.45f + 0.3f * pulse : 0.15f));
+    DrawEllipse((int)center.x, (int)center.y + 2, 5.0f, 12.0f, withAlpha(SPRING, 0.15f + (0.3f + 0.3f * pulse) * closeness));
     DrawRing(Vector2{center.x, center.y - 4.0f}, 7.0f, 11.0f, 180.0f, 360.0f, 16, BARK);
     DrawRing(Vector2{center.x, center.y - 4.0f}, 10.0f, 11.0f, 270.0f, 360.0f, 8, BARK_LIGHT);
-    for (int i = 0; ready && i < 4; i++) { // petals drifting into the hollow
+    for (int i = 0; closeness > 0.0f && i < 4; i++) { // petals drifting into the hollow
         float t = std::fmod(view.time * 0.5f + i * 0.25f, 1.0f);
         DrawRectangle((int)(center.x - 22.0f + t * 20.0f), (int)(center.y - 14.0f + std::sin(t * 6.0f + i) * 4.0f), 2, 1,
-                      withAlpha(PETAL, 1.0f - t));
+                      withAlpha(PETAL, closeness * loopEnvelope(t)));
     }
 }
 
@@ -329,32 +334,37 @@ void drawPassageMote(const RootPath& path, float t, float time) {
     }
 }
 
-// A round moon gate at the exit. A curtain of wisteria hangs in it until the loop is complete.
-void drawMoonGate(Rectangle gate, int cameraX, bool open, float time) {
+// A round moon gate at the exit. A curtain of wisteria hangs in it until the loop is complete;
+// then the strands part and draw up while the spring's light fills the ring (open: 0 -> 1).
+void drawMoonGate(Rectangle gate, int cameraX, float open, float time) {
     const int gx = toCanvasX(gate.x, cameraX);
     const int gy = toCanvasY(gate.y);
     const int gw = (int)(gate.width / CANVAS_SCALE);
     const int gh = (int)(gate.height / CANVAS_SCALE);
     const float radius = 17.0f;
     const Vector2 center = {(float)(gx + gw / 2), (float)(gy + gh) - radius - 2.0f};
+    const float light = smooth01(open);
 
-    if (open) {
-        DrawCircleGradient((int)center.x, (int)center.y, 40.0f, withAlpha(SPRING, 0.35f), withAlpha(SPRING, 0.0f));
-        DrawCircleV(center, radius - 3.0f, withAlpha(SPRING, 0.75f));
-        DrawCircleV(center, radius - 7.0f, withAlpha(WHITE, 0.5f));
+    DrawCircleV(center, radius - 3.0f, withAlpha(Color{24, 16, 46, 255}, 1.0f - light));
+    if (light > 0.0f) {
+        DrawCircleGradient((int)center.x, (int)center.y, 26.0f + 14.0f * light, withAlpha(SPRING, 0.35f * light), withAlpha(SPRING, 0.0f));
+        DrawCircleV(center, radius - 3.0f, withAlpha(SPRING, 0.75f * light));
+        DrawCircleV(center, (radius - 7.0f) * (0.4f + 0.6f * light), withAlpha(WHITE, 0.5f * light));
         for (int i = 0; i < 6; i++) {
-            float t = std::fmod(time * 0.4f + i * 0.17f, 1.0f);
+            float t = std::fmod(time * (0.35f + 0.1f * hash01(i * 7)) + i * 0.17f, 1.0f);
             DrawRectangle((int)center.x - 8 + (int)(hash01(i * 5 + 1) * 16.0f), (int)(center.y + 10.0f - t * 24.0f), 1, 1,
-                          withAlpha(WHITE, 1.0f - t));
+                          withAlpha(WHITE, light * loopEnvelope(t)));
         }
-    } else {
-        DrawCircleV(center, radius - 3.0f, Color{24, 16, 46, 255});
-        for (int strand = 0; strand < 7; strand++) { // wisteria curtain
-            int x = (int)center.x - 10 + strand * 3;
-            int length = 14 + (strand % 3) * 5;
-            int sway = (int)std::round(std::sin(time * 1.5f + strand) * 1.0f);
+    }
+    if (open < 1.0f) {
+        for (int strand = 0; strand < 7; strand++) { // wisteria curtain: sways, then parts to the sides
+            int part = (int)std::round((strand - 3) * light * 3.0f);
+            int x = (int)center.x - 10 + strand * 3 + part;
+            int length = (int)std::round((14 + (strand % 3) * 5) * (1.0f - 0.85f * light));
             for (int k = 0; k < length; k++) {
-                DrawRectangle(x + sway, (int)center.y - 12 + k, 1, 1, (k % 3 == 0) ? WISTERIA : lerpColor(WISTERIA, DARK, 0.4f));
+                int sway = (int)std::round(std::sin(time * 1.5f + strand + k * 0.1f) * (k / 18.0f) * 1.5f);
+                Color bloom = (k % 3 == 0) ? WISTERIA : lerpColor(WISTERIA, DARK, 0.4f);
+                DrawRectangle(x + sway, (int)center.y - 12 + k, 1, 1, withAlpha(bloom, 1.0f - light * 0.6f));
             }
         }
     }
@@ -414,6 +424,7 @@ void drawGardenHills() {
     DrawRectangle(564, 190, 3, 16, lerpColor(FAR_HILLS, SKY_LOW, 0.5f)); // its open slit
     DrawRectangle(556, 209, 2, 3, withAlpha(BLOSSOM, 0.6f));
     DrawRectangleGradientV(0, 180, CANVAS_WIDTH, 90, withAlpha(MIST, 0.0f), withAlpha(MIST, 0.3f));
+    DrawRectangle(0, 270, CANVAS_WIDTH, CANVAS_HEIGHT - 270, withAlpha(MIST, 0.3f)); // no seam where the haze ends
 }
 
 // The landmark: an ancient tree in the middle of the garden, hung with glowing fruit.
@@ -437,9 +448,9 @@ void drawAncientTree(float time) {
     }
     Color leaves = {44, 28, 84, 255};
     Color leavesLit = {78, 56, 128, 255};
-    for (int i = 0; i < 16; i++) { // the canopy: clustered crowns, lit from the moon on the left
-        float x = 60.0f + i * 34.0f + hash01(i * 7 + 1) * 18.0f;
-        float y = 6.0f + hash01(i * 11 + 2) * 50.0f + std::fabs(x - cx) * 0.12f;
+    for (int i = 0; i < 16; i++) { // the canopy: clustered crowns, lit from the moon on the left, rustling
+        float x = 60.0f + i * 34.0f + std::floor(hash01(i * 7 + 1) * 18.0f) + std::round(std::sin(time * 0.6f + i * 1.3f) * (i % 2 == 0 ? 0.6f : 1.2f));
+        float y = 6.0f + std::floor(hash01(i * 11 + 2) * 50.0f + std::fabs(x - cx) * 0.12f);
         float r = 26.0f + hash01(i * 13 + 3) * 16.0f;
         DrawCircleV(Vector2{x - 2.0f, y - 2.0f}, r, leavesLit);
         DrawCircleV(Vector2{x, y}, r, leaves);
@@ -462,22 +473,24 @@ void drawSpring(float time) {
     DrawEllipse(150, SPRING_Y + 30, 22.0f, 30.0f, withAlpha(SPRING, 0.35f));
     DrawEllipse(480, SPRING_Y + 30, 22.0f, 30.0f, withAlpha(SPRING, 0.35f));
     DrawRectangle(150, SPRING_Y, 330, 1, withAlpha(WHITE, 0.6f));
-    for (int i = 0; i < 26; i++) { // shimmer on the surface
-        float x = 160.0f + std::fmod(hash01(i * 5 + 3) * 310.0f + time * (6.0f + i % 4), 310.0f);
+    for (int i = 0; i < 26; i++) { // shimmer on the surface, fading in and out so nothing jumps
+        float cycle = (hash01(i * 5 + 3) * 310.0f + time * (6.0f + i % 4)) / 310.0f;
+        float t = cycle - std::floor(cycle);
+        float x = 160.0f + t * 310.0f;
         int y = SPRING_Y + 3 + (int)(hash01(i * 7 + 1) * 40.0f);
-        DrawRectangle((int)x, y, 3 + (int)(hash01(i * 11) * 8.0f), 1, withAlpha(WHITE, 0.25f));
+        DrawRectangle((int)x, y, 3 + (int)(hash01(i * 11) * 8.0f), 1, withAlpha(WHITE, 0.25f * loopEnvelope(t)));
     }
     for (int i = 0; i < 6; i++) { // small lotus flowers floating
         int x = 175 + i * 52 + (int)(hash01(i * 3 + 9) * 20.0f);
-        int y = SPRING_Y + 4 + (i % 2) * 6 + (int)(std::sin(time + i) * 1.0f);
+        int y = SPRING_Y + 4 + (i % 2) * 6 + (int)std::round(std::sin(time * 1.3f + i) * 1.0f); // bobbing on the water
         DrawRectangle(x - 2, y, 5, 1, MOSS);
         DrawRectangle(x - 1, y - 1, 3, 1, BLOSSOM);
         DrawRectangle(x, y - 2, 1, 1, PETAL);
     }
     for (int i = 0; i < 10; i++) { // light rising from the water
-        float t = std::fmod(time * 0.3f + i * 0.1f, 1.0f);
+        float t = std::fmod(time * (0.25f + 0.1f * hash01(i * 3 + 2)) + i * 0.1f, 1.0f);
         int x = 170 + (int)(hash01(i * 13 + 4) * 290.0f);
-        DrawRectangle(x, SPRING_Y - (int)(t * 60.0f), 1, 1, withAlpha(SPRING, 0.7f * (1.0f - t)));
+        DrawRectangle(x, SPRING_Y - (int)(t * 60.0f), 1, 1, withAlpha(SPRING, 0.7f * loopEnvelope(t)));
     }
 }
 
@@ -510,6 +523,7 @@ void drawGardenMiddle(float time) {
                          Vector2{(float)x, (float)(base - 31)}, stone);
     }
     DrawRectangleGradientV(0, 230, CANVAS_WIDTH, 70, withAlpha(MIST, 0.0f), withAlpha(MIST, 0.16f));
+    DrawRectangle(0, 300, CANVAS_WIDTH, CANVAS_HEIGHT - 300, withAlpha(MIST, 0.16f));
 }
 
 } // namespace
@@ -549,7 +563,7 @@ void drawGardenPlatforms(const SceneView& view) {
             drawGardenDetails(shape, ledge, outline, view.time);
             drawMistVeil(outline, mist, VEIL);
             // The tail's next is the head; that link is shown by the root, so no glow at the head.
-            if (node == next && node != view.head) drawNextGlow(ledge, view.time);
+            if (node == next && node != view.head) drawNextGlow(ledge, view.time, arrivalEase(view));
         }
         node = node->next;
         steps++;
@@ -562,7 +576,7 @@ void drawGardenPlatforms(const SceneView& view) {
     }
     bool onTail = view.current != nullptr && view.current->next == view.head;
     drawRootHollow(view.portalRect, view, onTail);
-    if (view.hasGate) drawMoonGate(view.gateRect, view.cameraX, view.gateOpen, view.time);
+    if (view.hasGate) drawMoonGate(view.gateRect, view.cameraX, view.gateProgress, view.time);
 
     RootPath path;
     if (view.passage >= 0.0f && findRootPath(view, path)) drawPassageMote(path, view.passage, view.time);
@@ -570,11 +584,12 @@ void drawGardenPlatforms(const SceneView& view) {
 
 void drawGardenForeground(const SceneView& view) {
     const float time = view.time;
-    for (int i = 0; i < 26; i++) { // petals drifting down through the garden
+    for (int i = 0; i < 26; i++) { // petals drifting down through the garden, turning as they fall
         float t = std::fmod(time * 0.06f + hash01(i * 7 + 1), 1.0f);
         float x = std::fmod(hash01(i * 13 + 2) * 700.0f + t * 120.0f, 700.0f) - 30.0f + std::sin(time + i) * 8.0f;
         float y = t * 380.0f - 10.0f;
-        DrawRectangle((int)x, (int)y, 2, 1, withAlpha((i % 3 == 0) ? WISTERIA : PETAL, 0.75f));
+        bool flat = std::cos(time * 3.2f + i * 1.9f) > 0.0f;
+        DrawRectangle((int)x, (int)y, flat ? 2 : 1, flat ? 1 : 2, withAlpha((i % 3 == 0) ? WISTERIA : PETAL, 0.75f * loopEnvelope(t)));
     }
     for (int i = 0; i < 16; i++) { // fireflies
         float x = hash01(i * 5 + 9) * CANVAS_WIDTH + std::sin(time * 0.6f + i * 1.4f) * 12.0f;

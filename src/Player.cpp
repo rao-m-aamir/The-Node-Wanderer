@@ -28,13 +28,29 @@ void updatePlayerMovement(Player& player, const PhysicsSettings& settings, float
         player.grounded = false;
     }
 
-    player.velocity.y += settings.gravity * dt;
-    if (player.velocity.y > settings.maxFallSpeed) {
-        player.velocity.y = settings.maxFallSpeed;
+    // Gravity is constant, so the vertical motion is integrated exactly (with the fall-speed cap).
+    // The jump arc is then the same at 30, 60, or 144 FPS.
+    float v0 = player.velocity.y;
+    float g = settings.gravity;
+    float vMax = settings.maxFallSpeed;
+    float dy;
+    if (v0 >= vMax) {
+        player.velocity.y = vMax;
+        dy = vMax * dt;
+    } else {
+        float v1 = v0 + g * dt;
+        if (v1 <= vMax) {
+            dy = v0 * dt + 0.5f * g * dt * dt;
+            player.velocity.y = v1;
+        } else { // reaches the cap during this frame
+            float tCap = (vMax - v0) / g;
+            dy = v0 * tCap + 0.5f * g * tCap * tCap + vMax * (dt - tCap);
+            player.velocity.y = vMax;
+        }
     }
 
     player.position.x += player.velocity.x * dt;
-    player.position.y += player.velocity.y * dt;
+    player.position.y += dy;
 
     // Animation timers.
     if (player.grounded && direction != 0.0f) {
@@ -182,11 +198,12 @@ void drawPart(const char* const* rows, int rowCount, int col, int row, const Spr
     }
 }
 
-// Scarf tail streaming from the back of the neck. droop > 0 hangs down, < 0 lifts up.
-void drawScarfTail(const SpriteBox& box, int neckRow, float droop, float time) {
+// Scarf tail streaming from the back of the neck. droop > 0 hangs down, < 0 lifts up;
+// flutter is how far the tip waves, speed how fast.
+void drawScarfTail(const SpriteBox& box, int neckRow, float droop, float time, float flutter, float speed) {
     int rows[5] = {0, 0, 0, 0, 0};
     for (int i = 1; i <= 4; i++) {
-        float wave = std::sin(time * 9.0f + i * 1.3f) * 0.6f * (i / 4.0f);
+        float wave = std::sin(time * speed + i * 1.3f) * flutter * (i / 4.0f);
         rows[i] = neckRow + (int)std::round(droop * i + wave);
     }
     for (int i = 1; i <= 4; i++) { // outline first, so it never covers the cloth
@@ -210,6 +227,8 @@ void drawTraveler(const Player& player, float time, Vector2 feet, float pixel) {
     int lanternLift = 0;  // moves the lantern up (-) or down (+)
     int lanternSwing = 0; // moves the lantern forward
     float scarfDroop = 0.45f;
+    float scarfFlutter = 0.6f; // how far the scarf's tip waves
+    float scarfSpeed = 6.0f;   // and how fast: a light breeze when standing still
 
     if (!player.grounded) {
         bool rising = player.velocity.y < 0.0f;
@@ -217,6 +236,8 @@ void drawTraveler(const Player& player, float time, Vector2 feet, float pixel) {
         legRows = rising ? 4 : 5;
         lanternLift = rising ? -1 : -2;
         scarfDroop = rising ? 0.7f : -0.5f;
+        scarfFlutter = 0.9f;
+        scarfSpeed = 12.0f;
         if (player.velocity.y < -450.0f) bob = -1; // a little stretch right after take-off
     } else if (player.landTimer > 0.0f) {
         legs = LEGS_LAND;
@@ -232,9 +253,12 @@ void drawTraveler(const Player& player, float time, Vector2 feet, float pixel) {
             bob = -1; // passing pose: body one pixel higher
         }
         lanternSwing = (frame == 0) ? 1 : 0;
-        scarfDroop = 0.0f; // streams straight back while walking
-    } else if (std::fmod(time, 1.6f) >= 0.8f) {
-        bob = 1; // idle breathing
+        scarfDroop = -0.12f; // streams back, lifting a little, while walking
+        scarfFlutter = 1.3f;
+        scarfSpeed = 15.0f;
+    } else {
+        if (std::fmod(time, 1.6f) >= 0.8f) bob = 1;             // idle breathing
+        lanternSwing = (std::sin(time * 1.7f) > 0.72f) ? 1 : 0; // the lantern sways a little on its handle
     }
 
     const int height = 10 + 8 + legRows;
@@ -259,9 +283,10 @@ void drawTraveler(const Player& player, float time, Vector2 feet, float pixel) {
         DrawRectangle((int)(feet.x - 6.0f * pixel), (int)feet.y, (int)(12.0f * pixel), (int)pixel, Fade(BLACK, 0.35f));
     }
 
-    drawScarfTail(box, bodyTop, scarfDroop, time);
+    drawScarfTail(box, bodyTop, scarfDroop, time, scarfFlutter, scarfSpeed);
     drawPart(legs, legRows, 0, legsTop, box, false);
     drawPart(BODY, 8, 0, bodyTop, box, false);
+    if (bob < 0) drawPart(BODY + 7, 1, 0, bodyTop + 8, box, false); // the coat's hem closes the gap above the legs
     bool blink = std::fmod(time + 0.37f, 3.4f) < 0.12f;
     drawPart(HEAD, 10, 1, headTop, box, blink);
 

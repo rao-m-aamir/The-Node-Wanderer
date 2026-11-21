@@ -92,6 +92,13 @@ bool insideSilhouette(const Silhouette& shape, int x, int dy) {
 void drawMistVeil(const Silhouette& shape, float amount, Color veil) {
     if (amount <= 0.01f) return;
     paintRows(shape, 0, shape.rows, withAlpha(veil, 0.55f * amount), 0);
+    // A thin band of mist settles on top as well, so grass, flowers, and posts on the ledge fade with it.
+    if (shape.rows > 0 && shape.count[0] > 0) {
+        int left = shape.spans[0][0].left;
+        int right = shape.spans[0][shape.count[0] - 1].right;
+        DrawRectangleGradientV(left - 1, shape.top - 12, right - left + 2, 12, withAlpha(veil, 0.0f),
+                               withAlpha(veil, 0.42f * amount));
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -99,26 +106,32 @@ void drawMistVeil(const Silhouette& shape, float amount, Color veil) {
 // ---------------------------------------------------------------------------
 
 void drawNextGlow(const Ledge& ledge, float time, float strength) {
+    if (strength <= 0.01f) return;
     float pulse = strength * (0.6f + 0.4f * std::sin(time * 3.0f));
     DrawRectangleGradientV(ledge.left, ledge.top - 18, ledge.width, 18, withAlpha(WARM_LIGHT, 0.0f),
                            withAlpha(WARM_LIGHT, 0.22f * pulse));
     DrawRectangle(ledge.left, ledge.top, ledge.width, 1, withAlpha(WARM_LIGHT, 0.55f * pulse));
-    for (int i = 0; i < 6; i++) { // motes rising from the surface
-        float t = std::fmod(time * 0.5f + i * 0.17f, 1.0f);
-        int x = ledge.left + 6 + (int)(hash01(ledge.seed * 3 + i) * (ledge.width - 12));
-        DrawRectangle(x, ledge.top - 2 - (int)(t * 18.0f), 1, 1, withAlpha(WARM_LIGHT, pulse * (1.0f - t)));
+    for (int i = 0; i < 6; i++) { // motes rising from the surface, each from a new spot every time
+        float cycle = time * (0.45f + 0.1f * hash01(ledge.seed + i)) + i * 0.17f;
+        float t = cycle - std::floor(cycle);
+        int pass = (int)std::floor(cycle);
+        int x = ledge.left + 6 + (int)(hash01(ledge.seed * 3 + i * 31 + pass * 7) * (ledge.width - 12));
+        DrawRectangle(x, ledge.top - 2 - (int)(t * 18.0f), 1, 1, withAlpha(WARM_LIGHT, pulse * loopEnvelope(t)));
     }
 }
 
 void drawPreviousGlow(const Ledge& ledge, float time, float strength) {
+    if (strength <= 0.01f) return;
     float pulse = strength * (0.6f + 0.4f * std::sin(time * 2.2f + 1.0f));
     DrawRectangleGradientV(ledge.left, ledge.top - 14, ledge.width, 14, withAlpha(COOL_LIGHT, 0.0f),
                            withAlpha(COOL_LIGHT, 0.2f * pulse));
     DrawRectangle(ledge.left, ledge.top, ledge.width, 1, withAlpha(COOL_LIGHT, 0.6f * pulse));
     for (int i = 0; i < 6; i++) { // sparkles drifting down onto the surface (the opposite motion to next)
-        float t = std::fmod(time * 0.45f + i * 0.19f, 1.0f);
-        int x = ledge.left + 6 + (int)(hash01(ledge.seed * 5 + i) * (ledge.width - 12));
-        DrawRectangle(x, ledge.top - 20 + (int)(t * 18.0f), 1, 1, withAlpha(COOL_LIGHT, pulse * t));
+        float cycle = time * (0.4f + 0.1f * hash01(ledge.seed * 2 + i)) + i * 0.19f;
+        float t = cycle - std::floor(cycle);
+        int pass = (int)std::floor(cycle);
+        int x = ledge.left + 6 + (int)(hash01(ledge.seed * 5 + i * 29 + pass * 11) * (ledge.width - 12));
+        DrawRectangle(x, ledge.top - 20 + (int)(t * 18.0f), 1, 1, withAlpha(COOL_LIGHT, pulse * loopEnvelope(t)));
     }
 }
 
@@ -129,7 +142,8 @@ void drawLanternPost(int x, int baseY, float flash, float time) {
     DrawRectangle(x + 6, baseY - 17, 1, 2, wood); // hook
 
     float flicker = 0.85f + 0.15f * std::sin(time * 11.0f) * std::sin(time * 6.3f);
-    int lx = x + 4;
+    int swing = (int)std::round(std::sin(time * 1.6f + x * 0.37f) * 0.6f); // the lantern rocks a little on its hook
+    int lx = x + 4 + swing;
     int ly = baseY - 15;
     DrawCircleGradient(lx + 2, ly + 3, 20.0f + 18.0f * flash, withAlpha(WARM_LIGHT, 0.3f * flicker + 0.35f * flash),
                        withAlpha(WARM_LIGHT, 0.0f));
@@ -148,11 +162,16 @@ void drawLanternPost(int x, int baseY, float flash, float time) {
 }
 
 void drawGrassTufts(const Ledge& ledge, Color light, Color mid, float time) {
-    for (int x = ledge.left + 1; x < ledge.left + ledge.width - 1; x += 3) {
-        float h = hash01(ledge.seed * 131 + x);
+    for (int dx = 1; dx < ledge.width - 1; dx += 3) {
+        // Keyed to the ledge, not the screen, so the tufts hold still while the camera moves.
+        float h = hash01(ledge.seed * 131 + dx);
         if (h < 0.35f) continue;
+        int x = ledge.left + dx;
         int height = 1 + (int)(h * 3.0f);
-        int sway = (h > 0.8f && std::sin(time * 2.0f + x * 0.3f) > 0.3f) ? 1 : 0;
-        DrawRectangle(x + sway, ledge.top - height, 1, height, (h > 0.7f) ? light : mid);
+        Color color = (h > 0.7f) ? light : mid;
+        // The tip bends in the breeze, each tuft with its own speed and phase.
+        int bend = (height > 1) ? (int)std::round(std::sin(time * (1.5f + h) + dx * 0.45f) * 0.7f) : 0;
+        if (height > 1) DrawRectangle(x, ledge.top - height + 1, 1, height - 1, color);
+        DrawRectangle(x + bend, ledge.top - height, 1, 1, color);
     }
 }

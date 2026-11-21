@@ -76,4 +76,5 @@ private:
 
     RegionInfo regions[REGION_COUNT] = {};
     bool bridgeBuilt = false;
+    Rectangle nullGap = {}; // Region 4: the gap after N3, measured once when the list is built
 };

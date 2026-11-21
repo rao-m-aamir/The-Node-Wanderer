@@ -77,6 +77,17 @@ bool insideSilhouette(const Silhouette& shape, int x, int dy);
 // Mist over a platform that no permitted link leads to from the current node.
 void drawMistVeil(const Silhouette& shape, float amount, Color veil);
 
+// For anything that loops with fmod (t goes 0 -> 1, then wraps): it rises from 0, holds,
+// and fades back to 0, so the wrap is never visible as a pop.
+inline float loopEnvelope(float t) {
+    float in = std::fmin(1.0f, t / 0.15f);
+    float out = std::fmin(1.0f, (1.0f - t) / 0.35f);
+    return std::fmax(0.0f, in * out);
+}
+
+// Link glows ease in after the player arrives on a node instead of switching on.
+inline float arrivalEase(const SceneView& view) { return smooth01(view.nodeTime / 0.45f); }
+
 // Next link: warm light rising from the platform. Previous link: cool light falling onto it.
 void drawNextGlow(const Ledge& ledge, float time, float strength = 1.0f);
 void drawPreviousGlow(const Ledge& ledge, float time, float strength);

@@ -240,11 +240,11 @@ void drawHangingRoots(const Ledge& ledge, const Silhouette& outline, int count, 
         bool onLeft = (i % 2 == 0);
         int x = onLeft ? left : right - 1;
         int length = 6 + (int)(hash01(ledge.seed * 59 + i) * 10.0f);
-        int sway = (int)std::round(std::sin(time * 1.3f + i) * 1.0f);
         for (int k = 0; k < length; k++) {
             int dx = onLeft ? -(k / 4) : (k / 4);
-            DrawRectangle(x + dx + (k > length / 2 ? sway : 0), ledge.top + dy + k, 1, 1,
-                          depthShade(BARK_DARK, dy + k, DEPTH));
+            // Swings from where it leaves the wall: the tip moves most, and every root has its own phase.
+            int sway = (int)std::round(std::sin(time * 1.3f + i * 1.9f + ledge.seed) * (k / (float)length) * 1.6f);
+            DrawRectangle(x + dx + sway, ledge.top + dy + k, 1, 1, depthShade(BARK_DARK, dy + k, DEPTH));
         }
     }
 }
@@ -279,8 +279,8 @@ void drawLogDetails(const Ledge& ledge, const Silhouette& outline) {
     for (int g = 0; g < 3; g++) { // bark grain
         int left, right;
         if (!rowSpan(outline, grainRows[g], left, right)) continue;
-        for (int x = left + 3; x < right - 3; x++) {
-            if (hash01(ledge.seed * 7 + g * 1000 + x) < 0.55f) DrawRectangle(x, ledge.top + grainRows[g], 1, 1, BARK_DARK);
+        for (int x = left + 3; x < right - 3; x++) { // keyed to the log, not the screen, so it holds still
+            if (hash01(ledge.seed * 7 + g * 1000 + (x - x0)) < 0.55f) DrawRectangle(x, ledge.top + grainRows[g], 1, 1, BARK_DARK);
         }
     }
     DrawEllipse(x0 + ledge.width * 2 / 3, ledge.top + 9, 3.0f, 2.0f, BARK_DARK); // knot
@@ -334,7 +334,7 @@ void drawRuinDetails(const Ledge& ledge, const Silhouette& outline, float time) 
         int x = x0 + 4 + (int)(hash01(ledge.seed * 61 + i) * (ledge.width - 8));
         int length = 8 + (int)(hash01(ledge.seed * 67 + i) * 14.0f);
         for (int k = 0; k < length; k++) {
-            int sway = (int)std::round(std::sin(time * 1.1f + i + k * 0.2f) * 0.6f);
+            int sway = (int)std::round(std::sin(time * 1.1f + i * 1.7f + ledge.seed + k * 0.2f) * (k / (float)length) * 1.6f);
             DrawRectangle(x + sway, ledge.top + 1 + k, 1, 1, MOSS_DARK);
             if (k % 3 == 1) DrawRectangle(x + sway + ((k / 3) % 2 == 0 ? 1 : -1), ledge.top + 1 + k, 1, 1, MOSS);
         }
@@ -369,8 +369,9 @@ void drawForestDetails(ForestShape shape, const Ledge& ledge, const Silhouette& 
     }
 }
 
-// An old stone arch around the exit. Vines block it until the objective is done.
-void drawExitArch(Rectangle gate, int cameraX, bool open, float time) {
+// An old stone arch around the exit. Vines block it until the objective is done;
+// then they fall away while warm light fills the arch (open: 0 closed -> 1 open).
+void drawExitArch(Rectangle gate, int cameraX, float open, float time) {
     const int gx = toCanvasX(gate.x, cameraX);
     const int gy = toCanvasY(gate.y);
     const int gw = (int)(gate.width / CANVAS_SCALE);
@@ -379,27 +380,33 @@ void drawExitArch(Rectangle gate, int cameraX, bool open, float time) {
     const int radius = gw / 2;
     const int pillarTop = gy + radius;
     const Vector2 center = {(float)(gx + radius), (float)pillarTop};
+    const float light = smooth01(open);
 
-    if (open) { // warm light and drifting motes
-        DrawCircleGradient(gx + radius, gy + gh / 2, 44.0f, withAlpha(WARM_LIGHT, 0.35f), withAlpha(WARM_LIGHT, 0.0f));
-        DrawCircleSector(center, (float)radius, 180.0f, 360.0f, 16, withAlpha(SUN, 0.9f));
-        DrawRectangleGradientV(gx, pillarTop, gw, bottom - pillarTop, withAlpha(SUN, 0.9f), withAlpha(MOSS_LIGHT, 0.6f));
+    if (light > 0.0f) { // warm light and drifting motes
+        DrawCircleGradient(gx + radius, gy + gh / 2, 30.0f + 14.0f * light, withAlpha(WARM_LIGHT, 0.35f * light), withAlpha(WARM_LIGHT, 0.0f));
+        DrawCircleSector(center, (float)radius, 180.0f, 360.0f, 16, withAlpha(SUN, 0.9f * light));
+        DrawRectangleGradientV(gx, pillarTop, gw, bottom - pillarTop, withAlpha(SUN, 0.9f * light), withAlpha(MOSS_LIGHT, 0.6f * light));
         for (int i = 0; i < 6; i++) {
-            float t = std::fmod(time * 0.4f + i * 0.17f, 1.0f);
+            float t = std::fmod(time * (0.35f + 0.1f * hash01(i * 3)) + i * 0.17f, 1.0f);
             int x = gx + 2 + (int)(hash01(i * 5 + 9) * (gw - 4));
-            DrawRectangle(x, bottom - 2 - (int)(t * gh), 1, 1, withAlpha(WHITE, 1.0f - t));
+            DrawRectangle(x, bottom - 2 - (int)(t * gh), 1, 1, withAlpha(WHITE, light * loopEnvelope(t)));
         }
-    } else { // dark leaves block the way
+    }
+    if (open < 1.0f) { // dark leaves block the way, then drop and fade as the arch opens
         Color shade = {16, 30, 28, 255};
-        DrawCircleSector(center, (float)radius, 180.0f, 360.0f, 16, shade);
-        DrawRectangle(gx, pillarTop, gw, bottom - pillarTop, shade);
+        float cover = 1.0f - light;
+        DrawCircleSector(center, (float)radius, 180.0f, 360.0f, 16, withAlpha(shade, cover));
+        DrawRectangle(gx, pillarTop, gw, bottom - pillarTop, withAlpha(shade, cover));
         for (int i = 0; i < 28; i++) {
             int x = gx + (int)(hash01(i * 7 + 1) * (gw - 1));
             int y = gy + 1 + (int)(hash01(i * 11 + 3) * (gh - 2));
             float dx = x - center.x;
             float dy = y - center.y;
             if (y < pillarTop && dx * dx + dy * dy > radius * radius) continue; // stay inside the arch
-            DrawRectangle(x, y, 2, 1, (i % 3 == 0) ? MOSS : MOSS_DARK);
+            float fall = open * open * (14.0f + hash01(i * 13 + 5) * 22.0f);
+            int drift = (int)std::round(std::sin(open * 6.0f + i) * open * 4.0f);
+            float leafAlpha = std::fmax(0.0f, 1.0f - open * (1.2f + hash01(i * 3 + 2)));
+            DrawRectangle(x + drift, y + (int)fall, 2, 1, withAlpha((i % 3 == 0) ? MOSS : MOSS_DARK, leafAlpha));
         }
     }
 
@@ -413,7 +420,7 @@ void drawExitArch(Rectangle gate, int cameraX, bool open, float time) {
     DrawRectangle((int)center.x - 2, gy - 6, 5, 6, STONE_LIGHT); // keystone
     DrawRectangle(gx - 6, bottom - 3, 7, 3, STONE_DARK);         // pillar bases
     DrawRectangle(gx + gw - 1, bottom - 3, 7, 3, STONE_DARK);
-    Color rune = open ? WARM_LIGHT : STONE_DARK;
+    Color rune = lerpColor(STONE_DARK, WARM_LIGHT, smooth01(open * 1.6f - 0.3f)); // the runes kindle as it opens
     for (int k = 0; k < 3; k++) {
         DrawRectangle(gx - 3, pillarTop + 4 + k * 6, 1, 3, rune);
         DrawRectangle(gx + gw + 2, pillarTop + 4 + k * 6, 1, 3, rune);
@@ -448,12 +455,13 @@ void drawSkyAndFarForest(int scroll) {
     DrawRectangleGradientV(0, 0, CANVAS_WIDTH, 150, SKY_TOP, SKY_MID);
     DrawRectangleGradientV(0, 150, CANVAS_WIDTH, CANVAS_HEIGHT - 150, SKY_MID, SKY_LOW);
 
-    float offset = scroll * 0.12f;
+    float offset = std::floor(scroll * 0.12f); // whole pixels, so the crowns shift instead of crawling
     for (int x = 0; x < CANVAS_WIDTH; x++) {
         int top = (int)treelineTop(x + offset, 24.0f, 196.0f, 16.0f, 30.0f, 101);
         DrawRectangle(x, top, 1, CANVAS_HEIGHT - top, FAR_TREES);
     }
     DrawRectangleGradientV(0, 130, CANVAS_WIDTH, 120, withAlpha(MIST, 0.0f), withAlpha(MIST, 0.4f)); // haze
+    DrawRectangle(0, 250, CANVAS_WIDTH, CANVAS_HEIGHT - 250, withAlpha(MIST, 0.4f)); // ...all the way down, no seam
 
     // Warm light from behind the trees blooms over the distant forest.
     int sunX = 450 - (int)(scroll * 0.05f);
@@ -461,33 +469,34 @@ void drawSkyAndFarForest(int scroll) {
     DrawCircleGradient(sunX, 140, 90.0f, withAlpha(SUN, 0.32f), withAlpha(SUN, 0.0f));
 }
 
-// Slanted beams of light that fade as they fall.
+// Slanted beams of light that fade as they fall, drifting slowly as the canopy moves.
 void drawLightShafts(int scroll, float time) {
-    float offset = scroll * 0.2f;
+    float offset = std::floor(scroll * 0.2f);
+    const int segments = 8;
     for (int i = 0; i < 4; i++) {
-        float topX = 330.0f + i * 70.0f - offset;
+        float topX = 330.0f + i * 70.0f - offset + std::sin(time * 0.21f + i * 1.3f) * 4.0f;
         float width = 16.0f + i * 6.0f;
         float slant = -130.0f;
         float alpha = 0.06f + 0.025f * std::sin(time * 0.6f + i * 1.7f);
-        for (int segment = 0; segment < 3; segment++) {
-            float y0 = segment * 100.0f;
-            float y1 = y0 + 100.0f;
+        for (int segment = 0; segment < segments; segment++) {
+            float y0 = segment * (float)CANVAS_HEIGHT / segments;
+            float y1 = y0 + (float)CANVAS_HEIGHT / segments;
             float x0 = topX + slant * (y0 / 300.0f);
             float x1 = topX + slant * (y1 / 300.0f);
-            Color light = withAlpha(SUN, alpha * (1.0f - segment * 0.3f));
+            Color light = withAlpha(SUN, alpha * (1.0f - (segment + 0.5f) / segments)); // fades out to nothing
             drawTriangleSafe(Vector2{x0, y0}, Vector2{x0 + width, y0}, Vector2{x1 + width, y1}, light);
             drawTriangleSafe(Vector2{x0, y0}, Vector2{x1 + width, y1}, Vector2{x1, y1}, light);
         }
     }
 }
 
-// Midground trees: dark trunks with clustered crowns, lit on the right side.
-void drawMidTrees(int scroll) {
-    float offset = scroll * 0.35f;
+// Midground trees: dark trunks with clustered crowns, lit on the right side. The crowns rustle.
+void drawMidTrees(int scroll, float time) {
+    float offset = std::floor(scroll * 0.35f);
     const float spacing = 96.0f;
     int first = (int)std::floor(offset / spacing) - 1;
     for (int i = first; i < first + 9; i++) {
-        float x = i * spacing + hash01(i * 17 + 5) * 40.0f - offset;
+        float x = std::floor(i * spacing + hash01(i * 17 + 5) * 40.0f - offset);
         int trunkWidth = 6 + (int)(hash01(i * 23 + 7) * 6.0f);
         int crownY = 40 + (int)(hash01(i * 31 + 9) * 50.0f);
         float radius = 22.0f + hash01(i * 37 + 3) * 14.0f;
@@ -499,19 +508,24 @@ void drawMidTrees(int scroll) {
         const float dxs[5] = {0.0f, -0.8f, 0.8f, -0.4f, 0.45f};
         const float dys[5] = {0.0f, 0.3f, 0.25f, -0.45f, -0.4f};
         const float sizes[5] = {1.0f, 0.7f, 0.75f, 0.6f, 0.62f};
-        for (int c = 0; c < 5; c++) {
-            DrawCircle((int)(x + dxs[c] * radius + 2.0f), (int)(crownY + dys[c] * radius - 2.0f), radius * sizes[c], lit);
+        float rustle[5];
+        for (int c = 0; c < 5; c++) { // each clump of leaves moves on its own, the outer ones more
+            rustle[c] = std::round(std::sin(time * (0.55f + 0.12f * c) + i * 1.9f + c * 1.3f) * (c == 0 ? 0.6f : 1.3f));
         }
         for (int c = 0; c < 5; c++) {
-            DrawCircle((int)(x + dxs[c] * radius), (int)(crownY + dys[c] * radius), radius * sizes[c], MID_TREES);
+            DrawCircle((int)(x + dxs[c] * radius + 2.0f + rustle[c]), (int)(crownY + dys[c] * radius - 2.0f), radius * sizes[c], lit);
+        }
+        for (int c = 0; c < 5; c++) {
+            DrawCircle((int)(x + dxs[c] * radius + rustle[c]), (int)(crownY + dys[c] * radius), radius * sizes[c], MID_TREES);
         }
     }
     DrawRectangleGradientV(0, 170, CANVAS_WIDTH, 110, withAlpha(MIST, 0.0f), withAlpha(MIST, 0.26f));
+    DrawRectangle(0, 280, CANVAS_WIDTH, CANVAS_HEIGHT - 280, withAlpha(MIST, 0.26f));
 }
 
 // The landmark: a giant old tree behind the middle of the route.
 void drawGiantTree(int scroll, float time) {
-    float cx = 360.0f - scroll * 0.5f;
+    float cx = std::floor(360.0f - scroll * 0.5f); // whole pixels, so the bark edges don't zigzag while scrolling
     Color shadow = lerpColor(GIANT_BARK, DARK, 0.4f);
     for (int y = 0; y < CANVAS_HEIGHT; y++) {
         float half = 22.0f + std::sin(y * 0.045f) * 2.0f;
@@ -535,21 +549,26 @@ void drawGiantTree(int scroll, float time) {
                        withAlpha(WARM_LIGHT, 0.0f));
     DrawLineEx(Vector2{cx - 10.0f, 40.0f}, Vector2{cx - 90.0f, -10.0f}, 10.0f, GIANT_BARK);
     DrawLineEx(Vector2{cx + 10.0f, 36.0f}, Vector2{cx + 100.0f, -6.0f}, 9.0f, GIANT_BARK);
-    for (int i = 0; i < 6; i++) { // moss hanging from the left branch
+    for (int i = 0; i < 6; i++) { // moss hanging from the left branch, swaying from where it hangs
         float t = 0.2f + i * 0.13f;
         int length = 6 + (int)(hash01(i * 3 + 77) * 12.0f);
-        DrawRectangle((int)(cx - 10.0f - 80.0f * t), (int)(40.0f - 50.0f * t) + 4, 1, length, VINE);
+        int mx = (int)(cx - 10.0f - 80.0f * t);
+        int my = (int)(40.0f - 50.0f * t) + 4;
+        for (int k = 0; k < length; k++) {
+            int sway = (int)std::round(std::sin(time * 1.1f + i * 1.7f + k * 0.12f) * (k / (float)length) * 2.0f);
+            DrawRectangle(mx + sway, my + k, 1, 1, VINE);
+        }
     }
 }
 
 // Dark leaf masses along the top edge, with vines hanging from them (kept well above the route).
 void drawCanopy(int scroll, float time) {
-    float offset = scroll * 0.6f;
+    float offset = std::floor(scroll * 0.6f);
     const float spacing = 34.0f;
     int first = (int)std::floor(offset / spacing) - 2;
     for (int i = first; i < first + 24; i++) {
-        float x = i * spacing - offset + hash01(i * 13 + 1) * 12.0f;
-        float y = -8.0f + hash01(i * 19 + 2) * 16.0f;
+        float x = i * spacing - offset + std::floor(hash01(i * 13 + 1) * 12.0f);
+        float y = -8.0f + std::floor(hash01(i * 19 + 2) * 16.0f) + std::round(std::sin(time * 0.9f + i * 1.7f) * 1.2f); // rustling
         float radius = 16.0f + hash01(i * 29 + 3) * 14.0f;
         DrawCircle((int)x, (int)y, radius, CANOPY);
         DrawRectangle((int)(x - radius * 0.4f), (int)(y + radius - 2.0f), 3, 1, VINE); // leaf highlights
@@ -570,10 +589,11 @@ void drawCanopy(int scroll, float time) {
 void drawFireflies(int scroll, float time) {
     float offset = scroll * 0.9f;
     for (int i = 0; i < 28; i++) {
+        float pace = 0.7f + 0.6f * hash01(i * 3 + 1); // each one wanders at its own pace
         float x = std::fmod(hash01(i * 11 + 4) * 1100.0f - offset + 4400.0f, 1100.0f) - 100.0f;
-        x += std::sin(time * 0.5f + i * 1.3f) * 10.0f;
-        float y = 70.0f + hash01(i * 7 + 2) * 200.0f + std::sin(time * 0.7f + i) * 8.0f;
-        float twinkle = 0.5f + 0.5f * std::sin(time * 2.3f + i * 2.1f);
+        x += std::sin(time * 0.5f * pace + i * 1.3f) * 10.0f;
+        float y = 70.0f + hash01(i * 7 + 2) * 200.0f + std::sin(time * 0.7f * pace + i) * 8.0f;
+        float twinkle = 0.5f + 0.5f * std::sin(time * 2.3f * pace + i * 2.1f);
         DrawCircleGradient((int)x, (int)y, 5.0f, withAlpha(WARM_LIGHT, 0.3f * twinkle), withAlpha(WARM_LIGHT, 0.0f));
         DrawRectangle((int)x, (int)y, 1, 1, withAlpha(WARM_LIGHT, 0.4f + 0.6f * twinkle));
     }
@@ -588,12 +608,13 @@ void drawFireflies(int scroll, float time) {
 void drawForestBackground(const SceneView& view) {
     drawSkyAndFarForest(view.scroll);
     drawLightShafts(view.scroll, view.time);
-    drawMidTrees(view.scroll);
+    drawMidTrees(view.scroll, view.time);
     drawGiantTree(view.scroll, view.time);
     drawCanopy(view.scroll, view.time);
     drawFireflies(view.scroll, view.time);
     // Mist just behind the route separates the platforms from the trees.
     DrawRectangleGradientV(0, 215, CANVAS_WIDTH, 80, withAlpha(MIST, 0.0f), withAlpha(MIST, 0.2f));
+    DrawRectangle(0, 295, CANVAS_WIDTH, CANVAS_HEIGHT - 295, withAlpha(MIST, 0.2f));
 }
 
 void drawForestPlatforms(const SceneView& view) {
@@ -615,7 +636,7 @@ void drawForestPlatforms(const SceneView& view) {
             fillForestLedge(shape, ledge, outline);
             drawForestDetails(shape, ledge, outline, mist, view.time);
             drawMistVeil(outline, mist, VEIL);
-            if (node == next) drawNextGlow(ledge, view.time);
+            if (node == next) drawNextGlow(ledge, view.time, arrivalEase(view));
         }
         node = node->next;
         steps++;
@@ -627,7 +648,7 @@ void drawForestPlatforms(const SceneView& view) {
         drawLanternPost(ledge.left + 6, ledge.top, view.checkpointFlash, view.time);
     }
     if (view.hasGate) {
-        drawExitArch(view.gateRect, view.cameraX, view.gateOpen, view.time);
+        drawExitArch(view.gateRect, view.cameraX, view.gateProgress, view.time);
     }
 }
 
@@ -642,6 +663,19 @@ void drawForestForeground(const SceneView& view) {
         DrawEllipse((int)x, 300 + (i % 3) * 14, 90.0f + (i % 2) * 40.0f, 10.0f, withAlpha(MIST, 0.1f));
     }
     DrawRectangleGradientV(0, 318, CANVAS_WIDTH, 42, withAlpha(DARK, 0.0f), withAlpha(DARK, 0.75f));
+
+    // Leaves drifting down through the light, tumbling as they fall. Each one starts somewhere new.
+    for (int i = 0; i < 14; i++) {
+        float cycle = time * (0.045f + 0.03f * hash01(i * 3 + 1)) + hash01(i * 7 + 2);
+        float t = cycle - std::floor(cycle);
+        int pass = (int)std::floor(cycle);
+        float x = std::fmod(hash01(i * 11 + pass * 5) * 760.0f + t * 50.0f - scroll * 1.0f + 7600.0f, 760.0f) - 60.0f;
+        x += std::sin(time * (1.1f + 0.4f * hash01(i)) + i) * 12.0f;
+        float y = -10.0f + t * 330.0f;
+        bool flat = std::cos(time * 3.6f + i * 1.7f) > 0.0f;
+        Color leaf = (i % 3 == 0) ? MOSS_LIGHT : ((i % 3 == 1) ? MOSS : lerpColor(MOSS_LIGHT, SUN, 0.45f));
+        DrawRectangle((int)x, (int)y, flat ? 2 : 1, flat ? 1 : 2, withAlpha(leaf, 0.85f * loopEnvelope(t)));
+    }
 
     // Dark grass and ferns along the bottom edge (nearer than the route, so they scroll faster).
     float offset = scroll * 1.3f;
@@ -668,13 +702,16 @@ void drawForestForeground(const SceneView& view) {
         DrawCircle((int)x, 4, 34.0f, DARK);
     }
 
-    // Leaves overhanging the top edge.
+    // Leaves overhanging the top edge, stirring in the breeze.
     for (int i = 0; i < 14; i++) {
-        float x = i * 80.0f + hash01(i * 5 + 3) * 30.0f - scroll * 1.15f;
+        float x = i * 80.0f + hash01(i * 5 + 3) * 30.0f - scroll * 1.15f + std::round(std::sin(time * 0.8f + i * 2.1f) * 1.5f);
         if (x < -40.0f || x > CANVAS_WIDTH + 40.0f) continue;
         float y = -10.0f + hash01(i * 9 + 4) * 8.0f;
         DrawCircle((int)x, (int)y, 18.0f + hash01(i * 13 + 5) * 10.0f, DARK);
-        for (int k = 0; k < 3; k++) DrawRectangle((int)x - 10 + k * 9, (int)y + 16 + (k % 2) * 3, 2, 3, DARK);
+        for (int k = 0; k < 3; k++) {
+            int dangle = (int)std::round(std::sin(time * 1.4f + i + k * 1.3f) * 1.0f);
+            DrawRectangle((int)x - 10 + k * 9 + dangle, (int)y + 16 + (k % 2) * 3, 2, 3, DARK);
+        }
     }
 
     // Soft vignette keeps the eye on the middle of the screen.

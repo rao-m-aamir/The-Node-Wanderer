@@ -57,7 +57,7 @@ Keep the implementation beginner-readable, with explicit pointer changes and cle
 - **Replay:** clears the non-owning pointers, clears all lists, and rebuilds the stage.
 - **Escape:** `SetExitKey(KEY_NULL)` makes Escape pause the game. Q quits.
 - **Memory check:** a live-node counter, `g_liveNodeCount`, is printed at shutdown and must be 0.
-- **Build:** CMake with `FetchContent` for Raylib 5.5, C++17. The project lives in the workspace root, not a `node-wanderer/` subfolder.
+- **Build:** CMake with `FetchContent` for Raylib 5.5, C++17. The project lives in the workspace root, not a `node-wanderer/` subfolder. Raylib is a static library and the MSVC runtime is linked statically (`/MT`), so the Release build is one self-contained exe that only uses Windows system DLLs.
 - **Art:** Raylib shapes only (no image assets), drawn into a 640x360 pixel canvas scaled 2x for every region. Each region has its own art file (`ForestArt.cpp`, `RuinsArt.cpp`, `GardenArt.cpp`, `EdgeArt.cpp`). Platforms are natural forms drawn only from node position and width; decoration has its own data and never becomes a platform. The world has no labels or pointer arrows: the next platform glows (and, in Region 2, previous glows cool), platforms that are not solid fade into mist, and the details live in the journal. The camera stays within the active region.
 - **Input:** the keyboard is read once per frame into an `InputFrame` (`Input.h`), which gameplay receives as plain values.
 

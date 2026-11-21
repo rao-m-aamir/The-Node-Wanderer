@@ -12,6 +12,8 @@ struct Particle {
     float maxLife;
     float size;       // in canvas pixels
     Color color;
+    float drag = 0.0f;      // horizontal slow-down per second (dust and chips settle)
+    bool gathering = false; // brightens as it arrives instead of fading out (recovery motes)
 };
 
 constexpr int MAX_PARTICLES = 192;
