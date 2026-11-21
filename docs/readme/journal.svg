@@ -19,7 +19,6 @@
 @keyframes curbox { 0% { transform:translateX(10.5px) } 17% { transform:translateX(10.5px) } 20% { transform:translateX(37.5px) } 37% { transform:translateX(37.5px) } 40% { transform:translateX(65.5px) } 57% { transform:translateX(65.5px) } 60% { transform:translateX(93.5px) } 77% { transform:translateX(93.5px) } 80% { transform:translateX(121.5px) } 100% { transform:translateX(121.5px) } }
 .curbox { animation: curbox 10s ease-in-out infinite; }
 .curbox { transform: translateX(10.5px); }
-@media (prefers-reduced-motion: reduce) { * { animation: none !important; } .smil { display: none; } }
 </style>
 <defs>
 <path id="g40" d="M1 0h1v1h-1zM0 1h1v1h-1zM0 2h1v1h-1zM0 3h1v1h-1zM0 4h1v1h-1zM0 5h1v1h-1zM1 6h1v1h-1z"/>

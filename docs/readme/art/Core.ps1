@@ -168,7 +168,6 @@ function Save-Svg([string]$path) {
     [void]$sb.Append("<svg xmlns=`"http://www.w3.org/2000/svg`" viewBox=`"0 0 $($d.W) $($d.H)`" width=`"$($d.W * $d.Scale)`" height=`"$($d.H * $d.Scale)`" shape-rendering=`"crispEdges`" role=`"img`" aria-label=`"$label`">`n")
     [void]$sb.Append("<title>$label</title>`n<style>`n")
     [void]$sb.Append($d.Css.ToString())
-    [void]$sb.Append("@media (prefers-reduced-motion: reduce) { * { animation: none !important; } .smil { display: none; } }`n")
     [void]$sb.Append("</style>`n<defs>`n")
     foreach ($code in $d.Glyphs) { [void]$sb.Append((Glyph-Def $code)).Append("`n") }
     [void]$sb.Append($d.Defs.ToString()).Append("</defs>`n")

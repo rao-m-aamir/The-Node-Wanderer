@@ -45,7 +45,6 @@
 .petal1 { animation: petal 8.3s linear infinite -2.3s; }
 .petal2 { animation: petal 9.6s linear infinite -4.6s; }
 .petal3 { animation: petal 7s linear infinite -6.9s; }
-@media (prefers-reduced-motion: reduce) { * { animation: none !important; } .smil { display: none; } }
 </style>
 <defs>
 <path id="g51" d="M0 0h4v1h-4zM4 1h1v1h-1zM4 2h1v1h-1zM1 3h3v1h-3zM4 4h1v1h-1zM4 5h1v1h-1zM0 6h4v1h-4z"/>

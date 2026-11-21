@@ -13,7 +13,6 @@
 @keyframes glint3 { 0% { transform:translateX(219px) } 32.143% { transform:translateX(219px) } 40.714% { transform:translateX(345px) } 100% { transform:translateX(345px) } }
 .glint3 { animation: glint3 7s linear infinite; }
 .glint3 { transform: translateX(-40px); }
-@media (prefers-reduced-motion: reduce) { * { animation: none !important; } .smil { display: none; } }
 </style>
 <defs>
 <path id="g43" d="M2 1h1v1h-1zM2 2h1v1h-1zM0 3h5v1h-5zM2 4h1v1h-1zM2 5h1v1h-1z"/>

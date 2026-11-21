@@ -193,7 +193,7 @@ function Traveler-Route([string]$id, $segs, [double]$loop, [double[]]$fade, [swi
     Anim ".$id-move" "$id-move" $loop
     Keyframes "$id-fade" $loop @(0, 'opacity:0', $fade[0], 'opacity:0', $fade[1], 'opacity:1', $fade[2], 'opacity:1', $fade[3], 'opacity:0', $loop, 'opacity:0')
     Anim ".$id-fade" "$id-fade" $loop
-    if ($null -eq $still) { $still = @([double]$segs[0][3], [double]$segs[0][4]) } # where it stands with reduced motion
+    if ($null -eq $still) { $still = @([double]$segs[0][3], [double]$segs[0][4]) } # where it stands if animation is unavailable
     $hidden = @('idle', 'walk', 'jump', 'fall', 'land' | Where-Object { $_ -ne $segs[0][0] } | ForEach-Object { ".$id-$_" }) -join ', '
     AddCss ".$id-move { transform: translate($(N $still[0])px,$(N $still[1])px); } $hidden { opacity: 0; }"
 

@@ -94,7 +94,6 @@
 .tv4-idle { animation: tv4-idle 8s steps(1,end) infinite; }
 @keyframes tv4-walk { 0% { opacity:0 } 62.5% { opacity:1 } 87.5% { opacity:0 } 100% { opacity:0 } }
 .tv4-walk { animation: tv4-walk 8s steps(1,end) infinite; }
-@media (prefers-reduced-motion: reduce) { * { animation: none !important; } .smil { display: none; } }
 </style>
 <defs>
 <path id="g38" d="M1 0h2v1h-2zM0 1h1v1h-1zM3 1h1v1h-1zM0 2h1v1h-1zM2 2h1v1h-1zM1 3h1v1h-1zM0 4h1v1h-1zM2 4h1v1h-1zM4 4h1v1h-1zM0 5h1v1h-1zM3 5h1v1h-1zM1 6h2v1h-2zM4 6h1v1h-1z"/>

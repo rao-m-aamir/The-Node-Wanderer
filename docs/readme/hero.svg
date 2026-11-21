@@ -138,7 +138,6 @@
 .gr4 { animation: grass 6.8s ease-in-out infinite; }
 @keyframes tglint { 0% { transform:translateX(0px) } 68.75% { transform:translateX(0px) } 82.5% { transform:translateX(226px) } 100% { transform:translateX(226px) } }
 .tglint { animation: tglint 8s linear infinite; }
-@media (prefers-reduced-motion: reduce) { * { animation: none !important; } .smil { display: none; } }
 </style>
 <defs>
 <path id="g45" d="M0 3h3v1h-3z"/>

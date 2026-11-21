@@ -39,7 +39,6 @@
 .ft-move { transform: translate(62px,46px); } .ft-idle, .ft-jump, .ft-fall, .ft-land { opacity: 0; }
 @keyframes ft-walk { 0% { opacity:1 } 100% { opacity:0 } }
 .ft-walk { animation: ft-walk 16s steps(1,end) infinite; }
-@media (prefers-reduced-motion: reduce) { * { animation: none !important; } .smil { display: none; } }
 </style>
 <defs>
 <path id="g46" d="M0 6h1v1h-1z"/>

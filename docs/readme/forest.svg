@@ -49,7 +49,6 @@
 .leaf1 { animation: leaf 8.3s linear infinite -2.3s; }
 .leaf2 { animation: leaf 9.6s linear infinite -4.6s; }
 .leaf3 { animation: leaf 7s linear infinite -6.9s; }
-@media (prefers-reduced-motion: reduce) { * { animation: none !important; } .smil { display: none; } }
 </style>
 <defs>
 <path id="g49" d="M1 0h1v1h-1zM0 1h2v1h-2zM1 2h1v1h-1zM1 3h1v1h-1zM1 4h1v1h-1zM1 5h1v1h-1zM0 6h3v1h-3z"/>

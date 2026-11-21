@@ -142,7 +142,7 @@ The whole world is drawn into a 640x360 pixel canvas that is scaled up 2x, so th
 - **Feedback:** dust when jumping and landing; leaves, chips, or petals when arriving on a new node; sparks when a checkpoint lantern lights; light gathering back into the traveler after a fall; and a fade with the region's name between regions.
 - **Interface:** small dark cards in play (the region and objective, the list as marks walked from the head, the last line of pointer code, and the controls), and an explorer's field journal for reading: the inspector, the notes, the pause cover, and the final summary.
 
-The animated pictures in this README are drawn in code as well. `docs/readme/make-art.ps1` paints them pixel by pixel with the game's palettes and the traveler sprite from `src/Player.cpp`, then writes them as SVG with CSS and SMIL animation. Each one loops, and holds still when the system asks for reduced motion. To redraw them after changing the art:
+The animated pictures in this README are drawn in code as well. `docs/readme/make-art.ps1` paints them pixel by pixel with the game's palettes and the traveler sprite from `src/Player.cpp`, then writes them as SVG with CSS and SMIL animation. Each one loops. To redraw them after changing the art:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File docs/readme/make-art.ps1          # all files
