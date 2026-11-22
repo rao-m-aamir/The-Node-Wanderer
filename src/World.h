@@ -27,6 +27,7 @@ struct RegionInfo {
     float right;
     Node* gateNode;  // NON-OWNING: the node the exit gate stands on (nullptr = no gate yet)
     bool gateOnLeft; // gate on the left or right end of that platform
+    float waterline; // world y of standing water (Region 2's flooded halls), or 0 for none
 };
 
 // TRAVERSAL RULE A (link-gated solidity):
@@ -61,6 +62,7 @@ public:
     Rectangle getNullHazardZone() const;
     bool isBridgeBuilt() const;
     Node* appendBridgeNode(); // calls append() on Region 4's list
+    Rectangle getBridgeRect() const; // layout only: where append() puts the bridge (the art paints its far landing)
 
     // Returns false if the region has no gate yet.
     bool getGateRect(int regionIndex, Rectangle& outRect) const;

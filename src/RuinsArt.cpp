@@ -1,326 +1,611 @@
 #include "ArtCommon.h"
 
-// Region 2, "The Forgotten Return": flooded ruins at blue hour, cool moonlight
-// and warm braziers. Platforms are drawn only from their node's position and width;
-// which ones the player can reach comes from next and previous.
+#include <algorithm>
+
+// Region 2, "The Forgotten Return": flooded ruins under a full moon. The path dips to a hall by
+// the water, then climbs a ruined tower to the key's shrine; the way back down is the lesson.
+// Still water reflects everything above it.
 
 namespace {
 
-const Color SKY_TOP = {10, 16, 36, 255};
-const Color SKY_MID = {28, 46, 82, 255};
-const Color SKY_LOW = {76, 100, 136, 255};
-const Color MOON = {226, 236, 255, 255};
-const Color FAR_RUINS = {46, 64, 98, 255};
-const Color MID_RUINS = {28, 40, 64, 255};
-const Color MID_RUINS_LIT = {54, 72, 104, 255};
-const Color MIST = {150, 178, 210, 255};
-const Color VEIL = {92, 116, 148, 255};
-const Color DEPTH = {16, 24, 42, 255};
-const Color DARK = {6, 10, 20, 255};
-const Color WATER = {34, 62, 100, 255};
-const Color WATER_DEEP = {8, 14, 30, 255};
+// Night blues, moonlight from the upper left, warm fire in the braziers.
+const Color SKY_TOP = {8, 12, 30, 255};
+const Color SKY_MID = {22, 36, 72, 255};
+const Color SKY_LOW = {64, 86, 126, 255};
+const Color MOON = {232, 238, 255, 255};
+const Color MIST = {140, 162, 198, 255};
+const Color VEIL = {86, 102, 138, 255};
+const Color DARK = {5, 8, 18, 255};
+const Color WATER_TOP = {24, 44, 76, 255};
+const Color WATER_DEEP = {6, 12, 28, 255};
 
-const Color STONE_LIGHT = {184, 192, 204, 255};
-const Color STONE = {120, 130, 150, 255};
-const Color STONE_DARK = {72, 80, 104, 255};
-const Color STONE_SHADE = {48, 56, 80, 255};
-const Color MOSS_LIGHT = {156, 204, 150, 255};
-const Color MOSS = {94, 146, 112, 255};
-const Color MOSS_DARK = {50, 92, 82, 255};
-const Color ROOT = {70, 56, 52, 255};
+const Color FAR_CITY[4] = {{30, 42, 72, 255}, {38, 52, 84, 255}, {50, 66, 98, 255}, {74, 92, 124, 255}};
+const Color MID_STONE[5] = {{16, 24, 44, 255}, {24, 36, 60, 255}, {36, 50, 78, 255}, {54, 70, 100, 255}, {82, 100, 132, 255}};
+const Color NEAR_STONE[4] = {{8, 12, 24, 255}, {14, 20, 36, 255}, {22, 30, 50, 255}, {36, 48, 72, 255}};
+const Color STONE[6] = {{24, 28, 44, 255}, {46, 52, 72, 255}, {76, 84, 106, 255},
+                        {114, 122, 144, 255}, {158, 166, 184, 255}, {204, 210, 224, 255}};
+const Color MOSS[5] = {{22, 44, 46, 255}, {40, 74, 66, 255}, {70, 112, 90, 255}, {112, 156, 120, 255}, {162, 202, 150, 255}};
+const Color ROOT = {58, 46, 44, 255};
 const Color BANNER = {148, 54, 62, 255};
-const Color BANNER_DARK = {100, 36, 48, 255};
+const Color BANNER_DARK = {98, 34, 46, 255};
 const Color RELIC_GOLD = {214, 176, 96, 255};
 const Color FIRE = {255, 168, 76, 255};
 const Color FIRE_HOT = {255, 232, 150, 255};
 
-const int WATERLINE = 292; // canvas y of the water surface
+const Vector2 TO_MOON = {-0.55f, -0.83f};
+const int WATERLINE = 312;   // canvas y of the water surface
+const float MOON_X = 236.0f; // in the sky layer (which does not scroll), clear of the columns at the start
+const float MOON_Y = 62.0f;
 
-const LedgeMaterial RUIN_STONE = {STONE_LIGHT, STONE, STONE_DARK, 4, STONE, STONE_SHADE, STONE_LIGHT, DEPTH};
+enum Layer { SKY_LAYER, FAR_LAYER, MID_LAYER, NEAR_LAYER, HANGING_LAYER, LAYER_COUNT };
+const float PARALLAX[LAYER_COUNT] = {0.0f, 0.1f, 0.35f, 0.72f, 0.9f};
+const float FRONT_PARALLAX = 1.3f;
 
-// ---------------------------------------------------------------------------
-// Platform shapes, one per node ID.
-// ---------------------------------------------------------------------------
-
-enum class RuinShape { Gatehouse, BrokenArch, Capital, Shrine, Steps };
-
-RuinShape shapeFor(const Node& node) {
-    switch (node.id) {
-        case 1: return RuinShape::Gatehouse;
-        case 2: return RuinShape::BrokenArch;
-        case 3: return RuinShape::Capital;
-        case 4: return RuinShape::Shrine;
-        default: return RuinShape::Steps;
-    }
+// The middle-distance arches. Bake and draw both use this, so the braziers sit on the right pillars.
+struct Arch {
+    float x;
+    int radius;
+    int springY;
+    bool broken;
+};
+Arch archAt(int i) {
+    Arch a;
+    a.x = 80.0f + i * 168.0f + hash01(i * 19 + 4) * 30.0f;
+    a.radius = 30 + (int)(hash01(i * 29 + 6) * 12.0f);
+    a.springY = 128 + (int)(hash01(i * 31 + 8) * 34.0f);
+    a.broken = hash01(i * 37 + 2) > 0.5f;
+    return a;
 }
+const int ARCH_COUNT = 5;
+const int PILLAR = 14;
 
-Silhouette buildRuinSilhouette(RuinShape shape, const Ledge& l) {
-    Silhouette s;
-    s.top = l.top;
-    const int x0 = l.left;
-    const int x1 = l.left + l.width;
-    const int w = l.width;
-    const int cx = x0 + w / 2;
-    for (int dy = 0; l.top + dy < CANVAS_HEIGHT; dy++) {
-        switch (shape) {
-            case RuinShape::Gatehouse: { // big cut blocks on a foundation that spreads into the water
-                int inset = (dy < 4) ? 0 : (dy < 30 ? 1 : 1 - (dy - 30) / 6);
-                if (inset < -6) inset = -6;
-                s.add(dy, x0 + inset, x1 - inset);
-                break;
-            }
-            case RuinShape::BrokenArch: { // a bridge span with an arch underneath; its right pier broke off
-                const int deck = 8;
-                const int pier = 26;
-                const int radius = w / 2 - pier;
-                if (dy < deck) {
-                    int lip = (dy >= 2 && dy < 5) ? 1 : 0; // a thin parapet band
-                    s.add(dy, x0 - lip, x1 + lip);
-                } else if (dy - deck < radius) {
-                    float d = (float)(radius - (dy - deck)); // height above the arch's spring line
-                    int half = (int)std::sqrt(std::fmax(0.0f, (float)(radius * radius) - d * d));
-                    s.add(dy, x0, cx - half);
-                    s.add(dy, cx + half, x1);
-                } else {
-                    s.add(dy, x0, x0 + pier);
-                    int broken = dy - deck - radius;
-                    if (broken < 26) s.add(dy, x1 - pier + broken / 3, x1 - broken / 5);
-                }
-                break;
-            }
-            case RuinShape::Capital: { // a carved column capital on a fluted shaft
-                if (dy < 5) {
-                    s.add(dy, x0, x1);
-                } else if (dy < 13) {
-                    float t = (dy - 5) / 8.0f;
-                    int inset = (int)(w * 0.3f * t * t);
-                    s.add(dy, x0 + inset, x1 - inset);
-                } else {
-                    int half = w * 20 / 100;
-                    s.add(dy, cx - half, cx + half);
-                }
-                break;
-            }
-            case RuinShape::Shrine: { // an altar with two steps, on a pedestal
-                if (dy < 3) s.add(dy, x0, x1);
-                else if (dy < 20) s.add(dy, x0 + 4, x1 - 4);
-                else if (dy < 24) s.add(dy, x0 + 1, x1 - 1);
-                else if (dy < 28) s.add(dy, x0 - 2, x1 + 2);
-                else {
-                    int half = w * 28 / 100 + (dy - 28) / 10;
-                    s.add(dy, cx - half, cx + half);
-                }
-                break;
-            }
-            case RuinShape::Steps: { // a landing with old stairs going down into the water on the left
-                if (dy < 4) {
-                    s.add(dy, x0, x1);
-                } else {
-                    int step = (dy - 4) / 6;
-                    if (step > 5) step = 5;
-                    s.add(dy, x0 - step * 7, x1 - 1);
-                }
-                break;
-            }
-        }
-    }
+Shading stoneShading(int seed, int darkenFrom) {
+    Shading s;
+    s.ramp = STONE;
+    s.steps = 6;
+    s.toLight = TO_MOON;
+    s.base = 0.5f;
+    s.rim = 0.32f;
+    s.bevel = 2.5f;
+    s.grain = 0.1f;
+    s.grainScale = 0.28f;
+    s.seed = seed;
+    s.darkenFrom = (float)darkenFrom;
+    s.darkenRange = 70.0f;
+    s.darkenAmount = 0.35f;
     return s;
 }
 
 // ---------------------------------------------------------------------------
-// Platform details
+// Painting helpers
 // ---------------------------------------------------------------------------
 
-// Mortar lines between cut stones, clipped to the outline. Joints are offset on every course.
-void drawMasonry(const Silhouette& s, int fromDy, int toDy, int course, int block, int seed) {
-    for (int dy = fromDy; dy < toDy && dy < s.rows; dy += course) {
-        paintRows(s, dy, dy + 1, depthShade(STONE_SHADE, dy, DEPTH), 1);
-        int offset = ((dy / course) % 2) * (block / 2) + (seed % 5);
-        for (int i = 0; i < s.count[dy]; i++) {
-            const Span& span = s.spans[dy][i];
-            for (int x = span.left + offset; x < span.right - 1; x += block) {
-                for (int k = 1; k < course; k++) {
-                    if (insideSilhouette(s, x, dy + k)) DrawRectangle(x, s.top + dy + k, 1, 1, depthShade(STONE_SHADE, dy + k, DEPTH));
-                }
+// Mortar lines with the joints offset every course, and a lit top edge on each block.
+void paintMasonry(Picture& p, const Mask& m, int fromY, int toY, int course, int block, int seed) {
+    for (int y = fromY, row = 0; y < toY; y += course, row++) {
+        for (int x = 0; x < p.width; x++) {
+            if (!m.at(x, y) || m.depth[y * p.width + x] <= 1.0f) continue;
+            p.set(x, y, STONE[1]);
+            if (m.at(x, y + 1) && m.depth[(y + 1) * p.width + x] > 1.0f) p.set(x, y + 1, scaleColor(p.get(x, y + 1), 1.12f));
+        }
+        int offset = (row % 2) * (block / 2) + (int)(hash01(seed + row) * 4.0f);
+        for (int x = offset; x < p.width; x += block) {
+            for (int k = 1; k < course; k++) {
+                if (m.at(x, y + k) && m.depth[(y + k) * p.width + x] > 1.0f) p.set(x, y + k, STONE[1]);
             }
         }
     }
 }
 
-void drawTopMoss(const Ledge& l, int count) {
-    for (int i = 0; i < count; i++) {
-        int x = l.left + 1 + (int)(hash01(l.seed * 43 + i) * (l.width - 6));
-        int width = 2 + i % 3;
-        DrawRectangle(x, l.top - 1, width, 1, MOSS_LIGHT);
-        DrawRectangle(x - 1, l.top, width + 2, 1, MOSS);
-        DrawRectangle(x + 1, l.top + 1, 1, 1 + i % 3, MOSS_DARK);
+void paintTopMoss(Picture& p, const Mask& m, int x0, int x1, int top, int seed) {
+    for (int i = 0; i < (x1 - x0) / 7; i++) {
+        int x = x0 + (int)(hash01(seed * 43 + i) * (x1 - x0 - 4));
+        int width = 2 + (int)(hash01(seed * 47 + i) * 6.0f);
+        for (int k = 0; k < width; k++) {
+            if (!m.at(x + k, top)) continue;
+            p.set(x + k, top, MOSS[4]);
+            p.set(x + k, top + 1, MOSS[2]);
+            if ((k + i) % 3 == 0) {
+                int drip = 1 + (int)(hash01(seed + i * 7 + k) * 5.0f);
+                for (int d = 2; d < 2 + drip; d++) if (m.at(x + k, top + d)) p.set(x + k, top + d, MOSS[1]);
+            }
+        }
     }
 }
 
-// A root or vine hanging from a point and swaying a little.
-void drawHangingRoot(int x, int y, int length, float time, int seed, Color color) {
+void paintRoots(Picture& p, int x, int y, int length, int seed) {
     for (int k = 0; k < length; k++) {
-        int sway = (int)std::round(std::sin(time * 1.2f + seed + k * 0.15f) * (k / (float)length) * 2.0f);
-        DrawRectangle(x + sway + (k / 7) * ((seed % 2) ? 1 : -1), y + k, 1, 1, color);
+        int wobble = (int)std::lround(std::sin(k * 0.3f + seed) * 1.2f) + (k / 9) * ((seed % 2) ? 1 : -1);
+        p.set(x + wobble, y + k, ROOT);
+        if (k % 5 == 3) p.set(x + wobble + 1, y + k, MOSS[1]);
     }
 }
 
-// A stone brazier. `ignite` counts up from 0 once it is lit (1 = burning steadily): the flames grow
-// out of the bowl with a flare. `waiting` = a faint cool shimmer that marks it as the goal.
+// Darker, greener stone where the water has stood.
+void paintWaterStain(Picture& p, int pictureWaterline) {
+    for (int y = std::max(0, pictureWaterline - 18); y < p.height; y++) {
+        float t = std::clamp((y - (pictureWaterline - 18)) / 18.0f, 0.0f, 1.0f);
+        for (int x = 0; x < p.width; x++) {
+            Color c = p.get(x, y);
+            if (c.a == 0) continue;
+            Color stained = mixColor(c, MOSS[0], 0.45f * t);
+            stained.a = c.a;
+            p.set(x, y, stained);
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Platforms
+// ---------------------------------------------------------------------------
+
+// N1: a gatehouse of big cut blocks, with a dark arched window.
+void paintGatehouse(LedgeCanvas& c, int seed) {
+    Picture& p = c.picture;
+    const int ox = c.originX, oy = c.originY, w = c.width;
+    Mask m(p.width, p.height);
+    for (int y = oy; y < p.height; y++) {
+        int dy = y - oy;
+        int left = ox + 1, right = ox + w - 1;
+        if (dy == 0) { left = ox; right = ox + w; }
+        else if (dy < 4) { left = ox - 1; right = ox + w + 1; }
+        else if (dy > 44) { left -= (dy - 44) / 5; right += (dy - 44) / 5; } // the foundation spreads into the water
+        m.span(y, left, right);
+    }
+    m.measure();
+    shade(p, m, stoneShading(seed, oy + 30));
+    paintMasonry(p, m, oy + 5, p.height, 9, 16, seed);
+    for (int x = ox; x < ox + w; x++) p.set(x, oy + 1, STONE[5]);
+    for (int x = ox + 2; x < ox + w - 2; x++) { // a carved band
+        p.set(x, oy + 14, STONE[4]);
+        if (x % 5 == 0) p.set(x, oy + 15, STONE[1]);
+    }
+    int cx = ox + w / 2;
+    for (int y = -6; y < 16; y++) { // the arched window
+        for (int x = -6; x <= 6; x++) {
+            if (y < 0 && x * x + y * y > 36) continue;
+            p.set(cx + x, oy + 26 + y, (x == -6 || y == -6) ? STONE[4] : STONE[0]);
+        }
+    }
+    paintTopMoss(p, m, ox, ox + w, oy, seed);
+    paintRoots(p, ox + w - 4, oy + 2, 26, seed);
+    paintRoots(p, ox + 8, oy + 3, 16, seed + 3);
+    paintWaterStain(p, WATERLINE - c.top + oy);
+}
+
+// N2: the floor of an old hall, half sunk, on an arch that the water runs through.
+void paintOldHall(LedgeCanvas& c, int seed) {
+    Picture& p = c.picture;
+    const int ox = c.originX, oy = c.originY, w = c.width;
+    const int pier = 24;
+    const int deck = 8;
+    const float archCx = ox + w * 0.5f;
+    const float archR = w * 0.5f - pier;
+    Mask m(p.width, p.height);
+    for (int y = oy; y < p.height; y++) {
+        int dy = y - oy;
+        if (dy == 0) { m.span(y, ox, ox + w); continue; }
+        if (dy < deck) { m.span(y, ox - 1, ox + w + 1); continue; }
+        float ay = (float)(dy - deck);
+        if (ay < archR) { // the arch's underside curves up between the piers
+            float half = std::sqrt(std::fmax(0.0f, archR * archR - (archR - ay) * (archR - ay)));
+            m.span(y, ox, (int)(archCx - half));
+            m.span(y, (int)(archCx + half), ox + w);
+        } else {
+            m.span(y, ox, ox + pier);
+            m.span(y, ox + w - pier, ox + w);
+        }
+    }
+    m.measure();
+    shade(p, m, stoneShading(seed, oy + 24));
+    paintMasonry(p, m, oy + 12, p.height, 8, 12, seed);
+    for (int i = 0; i <= 8; i++) { // voussoirs around the arch
+        float angle = 3.14159f + i * 3.14159f / 8.0f;
+        int x = (int)(archCx + std::cos(angle) * (archR + 3.0f));
+        int y = (int)(oy + deck + archR + std::sin(angle) * (archR + 3.0f));
+        p.set(x, y, STONE[1]);
+        p.set(x, y + 1, STONE[1]);
+    }
+    for (int x = ox - 1; x < ox + w + 1; x++) p.set(x, oy + 1, STONE[5]);
+    paintTopMoss(p, m, ox, ox + w, oy, seed);
+    paintRoots(p, (int)archCx + 6, oy + deck, 14, seed);
+    paintWaterStain(p, WATERLINE - c.top + oy);
+}
+
+// N3: the capital of a great column rising out of the water.
+void paintColonnade(LedgeCanvas& c, int seed) {
+    Picture& p = c.picture;
+    const int ox = c.originX, oy = c.originY, w = c.width;
+    const int cx = ox + w / 2;
+    Mask m(p.width, p.height);
+    for (int y = oy; y < p.height; y++) {
+        int dy = y - oy;
+        if (dy == 0) m.span(y, ox, ox + w);
+        else if (dy < 5) m.span(y, ox - 1, ox + w + 1);                     // the slab
+        else if (dy < 11) m.span(y, ox + (dy - 4) * 3, ox + w - (dy - 4) * 3); // the capital narrows
+        else {
+            int half = 13 + (int)(1.5f * std::sin(dy * 0.03f));             // the shaft, with a slight swell
+            m.span(y, cx - half, cx + half);
+        }
+    }
+    m.measure();
+    shade(p, m, stoneShading(seed, oy + 20));
+    for (int x = ox - 1; x < ox + w + 1; x++) p.set(x, oy + 1, STONE[5]);
+    for (int y = oy + 12; y < p.height; y++) { // fluting
+        for (int f = -10; f <= 10; f += 5) {
+            p.set(cx + f, y, STONE[(f > 0) ? 4 : 1]);
+        }
+    }
+    for (int side = 0; side < 2; side++) { // scroll carvings at the corners
+        int vx = side == 0 ? ox + 5 : ox + w - 6;
+        for (int k = 0; k < 8; k++) {
+            float a = k * 0.785f;
+            p.set(vx + (int)std::lround(std::cos(a) * 2.0f), oy + 7 + (int)std::lround(std::sin(a) * 2.0f), STONE[1]);
+        }
+    }
+    for (int k = 0; k < 14; k++) p.set(cx + 4 + (k % 2) - k / 5, oy + 22 + k, STONE[0]); // a crack
+    paintTopMoss(p, m, ox, ox + w, oy, seed);
+    paintRoots(p, ox + 10, oy + 5, 18, seed + 2);
+    paintWaterStain(p, WATERLINE - c.top + oy);
+}
+
+// N4: the key's shrine, on top of a ruined tower.
+void paintKeyShrine(LedgeCanvas& c, int seed) {
+    Picture& p = c.picture;
+    const int ox = c.originX, oy = c.originY, w = c.width;
+    const int cx = ox + w / 2;
+    Mask m(p.width, p.height);
+    for (int y = oy; y < p.height; y++) {
+        int dy = y - oy;
+        if (dy == 0) m.span(y, ox, ox + w);
+        else if (dy < 4) m.span(y, ox - 2, ox + w + 2); // cornice
+        else {
+            int inset = 3 - std::max(0, (dy - 60) / 8); // the tower widens toward the water
+            int notch = (hash01(seed + dy / 6) > 0.8f) ? 2 : 0;
+            m.span(y, ox + inset + notch, ox + w - inset);
+        }
+    }
+    m.measure();
+    shade(p, m, stoneShading(seed, oy + 40));
+    paintMasonry(p, m, oy + 8, p.height, 9, 14, seed);
+    for (int x = ox - 2; x < ox + w + 2; x++) p.set(x, oy + 1, STONE[5]);
+    for (int x = ox + 6; x < ox + w - 6; x += 6) { // a faded gold band
+        p.rect(x, oy + 5, 3, 1, RELIC_GOLD);
+    }
+    for (int y = -5; y < 12; y++) { // the empty niche where the key was kept
+        for (int x = -5; x <= 5; x++) {
+            if (y < 0 && x * x + y * y > 25) continue;
+            p.set(cx + x, oy + 16 + y, STONE[0]);
+        }
+    }
+    for (int i = 0; i < 2; i++) { // window slits
+        int x = ox + 14 + i * (w - 30);
+        p.rect(x, oy + 44, 3, 10, STONE[0]);
+        p.set(x, oy + 43, STONE[1]);
+    }
+    paintTopMoss(p, m, ox, ox + w, oy, seed);
+    paintRoots(p, ox + 4, oy + 4, 30, seed);
+    paintRoots(p, ox + w - 6, oy + 4, 22, seed + 5);
+    paintWaterStain(p, WATERLINE - c.top + oy);
+}
+
+// N5: a broad landing whose steps go down into the water, with the old doorway at its far end.
+void paintFarSteps(LedgeCanvas& c, int seed) {
+    Picture& p = c.picture;
+    const int ox = c.originX, oy = c.originY, w = c.width;
+    Mask m(p.width, p.height);
+    for (int y = oy; y < p.height; y++) {
+        int dy = y - oy;
+        int left = ox;
+        if (dy > 0 && dy < 3) left = ox - 1;
+        if (dy >= 4) left = ox - std::min(5, (dy - 4) / 6 + 1) * 5; // stairs stepping down to the left
+        m.span(y, left, ox + w + ((dy > 0) ? 1 : 0));
+    }
+    m.measure();
+    shade(p, m, stoneShading(seed, oy + 30));
+    for (int step = 0; step < 6; step++) { // each step's lit tread
+        int y = oy + 4 + step * 6;
+        int x = ox - (step + 1) * 5;
+        for (int k = 0; k < 6 && step < 5; k++) p.set(x + k, y, STONE[5]);
+    }
+    paintMasonry(p, m, oy + 6, p.height, 8, 15, seed);
+    for (int x = ox; x < ox + w; x++) p.set(x, oy + 1, STONE[5]);
+    paintTopMoss(p, m, ox, ox + w - 30, oy, seed);
+    paintRoots(p, ox + w - 40, oy + 3, 20, seed);
+    paintWaterStain(p, WATERLINE - c.top + oy);
+}
+
+void paintRuinsLedge(const Node& node, LedgeCanvas& c) {
+    int seed = node.id * 37 + 11;
+    switch (node.id) {
+        case 1: paintGatehouse(c, seed); break;
+        case 2: paintOldHall(c, seed); break;
+        case 3: paintColonnade(c, seed); break;
+        case 4: paintKeyShrine(c, seed); break;
+        default: paintFarSteps(c, seed); break;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Scenery
+// ---------------------------------------------------------------------------
+
+Picture paintBanner(int width, int length, int seed) {
+    Picture p(width + 2, length + 2);
+    p.rect(0, 0, width + 2, 1, RELIC_GOLD); // the rod
+    for (int y = 1; y <= length; y++) {
+        int cut = (y > length - 4) ? (y - (length - 4)) * 2 : 0; // a tattered point
+        for (int x = 1 + cut / 2; x < width + 1 - cut / 2; x++) {
+            bool stripe = (y % 7 == 3);
+            Color c = (x == 1) ? BANNER_DARK : (stripe ? RELIC_GOLD : BANNER);
+            if (hash01(seed * 13 + x * 31 + y) < 0.06f) continue; // moth holes
+            p.set(x, y, mixColor(c, MID_STONE[1], 0.25f));
+        }
+    }
+    return p;
+}
+
+Picture paintHangingRoots(int count, int length, int seed) {
+    Picture p(count * 6 + 4, length + 2);
+    for (int i = 0; i < count; i++) {
+        int len = length / 2 + (int)(hash01(seed + i * 5) * length / 2);
+        for (int k = 0; k < len; k++) {
+            int wobble = (int)std::lround(std::sin(k * 0.25f + i * 1.3f) * 1.0f);
+            p.set(2 + i * 6 + wobble, k, NEAR_STONE[0]);
+            if (k < len / 2) p.set(3 + i * 6 + wobble, k, NEAR_STONE[0]);
+            if (k % 6 == 4) p.set(3 + i * 6 + wobble, k, NEAR_STONE[2]);
+        }
+    }
+    return p;
+}
+
+Picture paintReeds(int width, int height, int seed) {
+    Picture p(width, height);
+    for (int i = 0; i < width / 3; i++) {
+        int x = 1 + i * 3 + (int)(hash01(seed + i) * 2.0f);
+        int h = height / 2 + (int)(hash01(seed * 3 + i) * height / 2);
+        for (int k = 0; k < h; k++) {
+            int lean = (int)std::lround((k / (float)height) * (k / (float)height) * (hash01(seed + i * 7) * 4.0f - 2.0f));
+            p.set(x + lean, height - 1 - k, DARK);
+        }
+        if (i % 3 == 0) p.rect(x - 1 + (int)(hash01(seed + i * 7) * 4.0f - 2.0f), height - h - 3, 3, 4, DARK); // a reed head
+    }
+    return p;
+}
+
+void bakeRuins(RegionArt& art, const World& world) {
+    const RegionInfo& info = world.getRegion(1);
+    const int range = scrollRangeOf(info);
+    art.waterline = WATERLINE;
+
+    Picture sky(CANVAS_WIDTH, CANVAS_HEIGHT);
+    ditherGradient(sky, 0, 150, SKY_TOP, SKY_MID);
+    ditherGradient(sky, 150, WATERLINE, SKY_MID, SKY_LOW);
+    for (int i = 0; i < 90; i++) { // stars, fewer near the moon
+        int x = (int)(hash01(i * 7 + 1) * CANVAS_WIDTH);
+        int y = (int)(hash01(i * 13 + 2) * 170.0f);
+        float dx = x - MOON_X, dy = y - MOON_Y;
+        if (dx * dx + dy * dy < 70.0f * 70.0f) continue;
+        sky.set(x, y, mixColor(SKY_MID, MOON, 0.35f + 0.6f * hash01(i * 5)));
+    }
+    for (int y = -16; y <= 16; y++) { // the moon, with its seas
+        for (int x = -16; x <= 16; x++) {
+            float d = std::sqrt((float)(x * x + y * y));
+            if (d > 15.5f) continue;
+            float sea = fbm2((x + 40) * 0.18f, (y + 40) * 0.18f, 41, 3);
+            Color c = (sea > 0.58f) ? mixColor(MOON, SKY_LOW, 0.22f) : MOON;
+            if (d > 14.5f) c = mixColor(MOON, SKY_LOW, 0.3f);
+            sky.set((int)MOON_X + x, (int)MOON_Y + y, c);
+        }
+    }
+    storeLayer(art, sky, PARALLAX[SKY_LAYER], 0);
+
+    // A drowned city far away: towers with broken tops, and a long aqueduct.
+    Picture far(layerWidth(range, PARALLAX[FAR_LAYER]), CANVAS_HEIGHT);
+    for (int i = 0; i < 14; i++) {
+        int x = (int)(i * 52.0f + hash01(i * 7 + 3) * 24.0f) - 10;
+        int width = 12 + (int)(hash01(i * 11 + 5) * 12.0f);
+        int top = WATERLINE - 70 - (int)(hash01(i * 17 + 9) * 80.0f);
+        for (int y = top; y < WATERLINE; y++) {
+            for (int xx = x; xx < x + width; xx++) {
+                bool lit = xx >= x + width - 2;
+                far.set(xx, y, FAR_CITY[lit ? 2 : (y < top + 4 ? 1 : 0)]);
+            }
+        }
+        far.rect(x, top - 6, width / 2, 6, FAR_CITY[0]); // a broken top
+        for (int k = 0; k < 3; k++) far.rect(x + width / 2 - 1, top + 10 + k * 14, 2, 4, FAR_CITY[3]);
+    }
+    for (int x = 0; x < far.width; x++) { // what is left of an aqueduct, in two broken runs
+        int pier = x % 34;
+        if ((x > 300 && x < 470) || x > 760 || hash01(x / 34 + 50) > 0.7f) continue; // fallen spans
+        for (int y = 168; y < 176; y++) far.set(x, y, FAR_CITY[1]);
+        if (pier < 6) for (int y = 176; y < WATERLINE; y++) far.set(x, y, FAR_CITY[0]);
+        float dx = pier - 20.0f;
+        for (int y = 176; y < 192; y++) {
+            float dy = 190.0f - y;
+            float d = std::sqrt(dx * dx + dy * dy);
+            if (pier >= 6 && d > 11.0f && d < 14.0f) far.set(x, y, FAR_CITY[1]);
+        }
+    }
+    fogRows(far, MIST, 120, WATERLINE, 0.45f, 0.7f);
+    storeLayer(art, far, PARALLAX[FAR_LAYER], 0);
+
+    // Great broken arches in the middle distance, standing in the water.
+    Picture mid(layerWidth(range, PARALLAX[MID_LAYER]), CANVAS_HEIGHT);
+    Mask midMask(mid.width, CANVAS_HEIGHT);
+    for (int i = 0; i < ARCH_COUNT; i++) {
+        Arch a = archAt(i);
+        int leftX = (int)a.x - a.radius - PILLAR / 2;
+        int rightX = (int)a.x + a.radius - PILLAR / 2;
+        int rightTop = a.broken ? a.springY + 34 : a.springY;
+        midMask.rect(leftX, a.springY, PILLAR, WATERLINE - a.springY + 2);
+        midMask.rect(rightX, rightTop, PILLAR, WATERLINE - rightTop + 2);
+        midMask.rect(leftX - 2, a.springY - 4, PILLAR + 4, 4); // capitals
+        if (!a.broken) midMask.rect(rightX - 2, a.springY - 4, PILLAR + 4, 4);
+        float outer = (float)(a.radius + PILLAR / 2), inner = (float)(a.radius - PILLAR / 2);
+        for (int y = a.springY - (int)outer; y < a.springY; y++) {
+            for (int x = (int)(a.x - outer); x <= (int)(a.x + outer); x++) {
+                float dx = x + 0.5f - a.x, dy = y + 0.5f - a.springY;
+                float d = std::sqrt(dx * dx + dy * dy);
+                if (d < inner || d > outer) continue;
+                if (a.broken && std::atan2(-dy, dx) < 1.1f) continue; // the right side of the arch has fallen
+                midMask.set(x, y);
+            }
+        }
+    }
+    midMask.measure();
+    Shading midStyle;
+    midStyle.ramp = MID_STONE;
+    midStyle.steps = 5;
+    midStyle.toLight = TO_MOON;
+    midStyle.base = 0.34f;
+    midStyle.rim = 0.4f;
+    midStyle.bevel = 2.0f;
+    midStyle.grain = 0.1f;
+    midStyle.seed = 33;
+    midStyle.dither = false;
+    shade(mid, midMask, midStyle);
+    fogRows(mid, MIST, 150, WATERLINE, 0.12f, 0.4f);
+    storeLayer(art, mid, PARALLAX[MID_LAYER], 0);
+    for (int i = 0; i < ARCH_COUNT; i++) { // banners from the whole arches
+        Arch a = archAt(i);
+        if (a.broken) continue;
+        Picture banner = paintBanner(9, 24 + (i % 2) * 6, 50 + i);
+        storeSway(art, banner, MID_LAYER, false, a.x - 5.0f, (float)(a.springY - a.radius + 2), 2.5f, true, 6, 0.1f * i);
+    }
+
+    // Columns just behind the route, dark against the water.
+    Picture nearCols(layerWidth(range, PARALLAX[NEAR_LAYER]), CANVAS_HEIGHT);
+    Mask nearMask(nearCols.width, CANVAS_HEIGHT);
+    // Placed in the gaps between platforms at mid-scroll, so they frame the route instead of standing behind a ledge.
+    const float columnX[4] = {154.0f, 469.0f, 629.0f, 820.0f};
+    const int columnTop[4] = {60, 150, 30, 190};
+    for (int i = 0; i < 4; i++) {
+        int top = columnTop[i];
+        nearMask.rect((int)columnX[i] - 12, top, 24, WATERLINE - top + 2);
+        nearMask.rect((int)columnX[i] - 15, top - 5, 30, 5);
+        if (hash01(i * 7 + 71) > 0.4f) nearMask.rect((int)columnX[i] - 15, top - 9, 18, 4); // a broken upper drum
+    }
+    nearMask.measure();
+    Shading nearStyle = midStyle;
+    nearStyle.ramp = NEAR_STONE;
+    nearStyle.steps = 4;
+    nearStyle.base = 0.3f;
+    nearStyle.seed = 72;
+    shade(nearCols, nearMask, nearStyle);
+    for (int i = 0; i < 4; i++) { // fluting, and the moon's light along the left edge
+        for (int y = columnTop[i]; y < WATERLINE; y++) {
+            if (nearMask.at((int)columnX[i] - 12, y)) nearCols.set((int)columnX[i] - 12, y, NEAR_STONE[3]);
+            for (int f = -8; f <= 8; f += 4) if (nearMask.at((int)columnX[i] + f, y)) nearCols.set((int)columnX[i] + f, y, NEAR_STONE[(f > 0) ? 0 : 2]);
+        }
+    }
+    storeLayer(art, nearCols, PARALLAX[NEAR_LAYER], 0);
+
+    // Roots hanging from the vaults above, swaying in the draft.
+    storeEmptyLayer(art, PARALLAX[HANGING_LAYER]);
+    int hangWidth = layerWidth(range, PARALLAX[HANGING_LAYER]);
+    for (int i = 0; i * 74 < hangWidth; i++) {
+        Picture roots = paintHangingRoots(3 + i % 3, 30 + (int)(hash01(i * 9 + 1) * 40.0f), 80 + i * 7);
+        storeSway(art, roots, HANGING_LAYER, false, i * 74.0f + hash01(i * 3) * 30.0f, -2.0f, 3.0f, true, 5, 0.12f * (i % 4));
+    }
+
+    const Node* head = world.getHead(1);
+    const Node* node = head;
+    for (int steps = 0; node != nullptr && steps < MAX_NODES_PER_REGION; steps++) {
+        LedgeCanvas canvas = makeLedgeCanvas(*node, 30, 12);
+        paintRuinsLedge(*node, canvas);
+        storeLedge(art, *node, canvas);
+        node = node->next;
+    }
+
+    // Foreground: a broken column at the start, roots overhead, reeds at the water's edge.
+    Picture front(layerWidth(range, FRONT_PARALLAX), CANVAS_HEIGHT);
+    for (int y = 60; y < CANVAS_HEIGHT; y++) {
+        for (int x = 0; x < 30; x++) front.set(x, y, (x == 27) ? NEAR_STONE[2] : DARK);
+    }
+    front.rect(0, 52, 36, 8, DARK);
+    storeLayer(art, front, FRONT_PARALLAX, 0, true);
+    for (int i = 0; i * 90 < front.width; i++) {
+        Picture reeds = paintReeds(30 + (int)(hash01(i * 5) * 20.0f), 30 + (int)(hash01(i * 7) * 24.0f), 120 + i);
+        storeSway(art, reeds, 0, true, 40.0f + i * 90.0f + hash01(i * 3) * 40.0f, (float)(CANVAS_HEIGHT - reeds.height + 2), 2.0f,
+                  false, 4, 0.15f * (i % 3));
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Live pieces: braziers, the key, the doorway
+// ---------------------------------------------------------------------------
+
+// A stone brazier. `ignite` counts up from 0 once it is lit: the flames grow out of the bowl
+// with a flare. `waiting` = a faint cool shimmer that marks it as the goal.
 void drawBrazier(int x, int baseY, float ignite, float waiting, float time) {
-    DrawRectangle(x + 3, baseY - 5, 2, 5, STONE_DARK); // stand
-    DrawRectangle(x, baseY - 8, 8, 3, STONE);          // bowl
-    DrawRectangle(x + 1, baseY - 5, 6, 1, STONE_DARK);
-    DrawRectangle(x, baseY - 8, 8, 1, STONE_LIGHT);
+    DrawRectangle(x + 3, baseY - 5, 2, 5, STONE[1]);
+    DrawRectangle(x, baseY - 8, 8, 3, STONE[3]);
+    DrawRectangle(x + 1, baseY - 5, 6, 1, STONE[1]);
+    DrawRectangle(x, baseY - 8, 8, 1, STONE[5]);
     if (waiting > 0.01f) {
         float pulse = waiting * (0.5f + 0.5f * std::sin(time * 3.0f));
-        DrawCircleGradient(x + 4, baseY - 10, 16.0f, withAlpha(COOL_LIGHT, 0.3f * pulse), withAlpha(COOL_LIGHT, 0.0f));
         DrawRectangle(x + 2, baseY - 9, 4, 1, withAlpha(COOL_LIGHT, pulse));
+        for (int i = 0; i < 3; i++) { // cool sparks waiting above the cold bowl
+            float t = std::fmod(time * 0.5f + i * 0.33f, 1.0f);
+            DrawRectangle(x + 2 + i * 2, baseY - 10 - (int)(t * 10.0f), 1, 1, withAlpha(COOL_LIGHT, waiting * loopEnvelope(t)));
+        }
     }
     if (ignite <= 0.0f) return;
     float grow = smooth01(ignite);
-    float flare = (ignite < 1.0f) ? std::sin(ignite * 3.14159f) : 0.0f; // bright at the moment it catches
-    float flicker = 0.8f + 0.12f * std::sin(time * 13.0f) + 0.08f * std::sin(time * 21.7f + 1.3f);
-    DrawCircleGradient(x + 4, baseY - 12, 12.0f + 14.0f * grow + 16.0f * flare, withAlpha(FIRE, 0.38f * flicker * grow + 0.3f * flare),
-                       withAlpha(FIRE, 0.0f));
+    float flare = (ignite < 1.0f) ? std::sin(ignite * 3.14159f) : 0.0f;
     for (int i = 0; i < 4; i++) { // flame tongues
-        float lick = 3.0f + (0.5f + 0.5f * std::sin(time * (9.0f + i * 2.3f) + i)) * 4.0f;
-        int height = (int)std::round(lick * grow);
-        if (height > 0) DrawRectangle(x + 1 + i * 2, baseY - 8 - height, 2, height, (i % 2 == 0) ? FIRE : FIRE_HOT);
+        float lick = 3.0f + (0.5f + 0.5f * std::sin(time * (9.0f + i * 2.3f) + i)) * 5.0f;
+        int height = (int)std::lround(lick * grow + flare * 4.0f);
+        if (height > 0) DrawRectangle(x + i * 2, baseY - 8 - height, 2, height, (i % 2 == 0) ? FIRE : FIRE_HOT);
     }
-    for (int i = 0; i < 3; i++) { // embers rising and fading
-        float t = std::fmod(time * (0.7f + 0.15f * i) + i * 0.33f, 1.0f);
-        DrawRectangle(x + 2 + i * 2 + (int)(std::sin(time * 3.0f + i) * 2.0f), baseY - 12 - (int)(t * 16.0f), 1, 1,
+    DrawRectangle(x + 3, baseY - 10, 2, 2, WHITE);
+    for (int i = 0; i < 4; i++) { // embers rising
+        float t = std::fmod(time * (0.6f + 0.15f * i) + i * 0.27f, 1.0f);
+        DrawRectangle(x + 2 + i * 2 + (int)(std::sin(time * 3.0f + i) * 2.0f), baseY - 12 - (int)(t * 20.0f), 1, 1,
                       withAlpha(FIRE_HOT, grow * loopEnvelope(t)));
     }
     for (int i = 0; flare > 0.0f && i < 8; i++) { // sparks thrown out as it catches
         float angle = i * 0.785f + 0.4f;
-        float distance = ignite * 14.0f;
-        DrawRectangle(x + 4 + (int)(std::cos(angle) * distance), baseY - 12 + (int)(std::sin(angle) * distance * 0.7f - ignite * 5.0f),
+        float distance = ignite * 16.0f;
+        DrawRectangle(x + 4 + (int)(std::cos(angle) * distance), baseY - 12 + (int)(std::sin(angle) * distance * 0.7f - ignite * 6.0f),
                       1, 1, withAlpha(FIRE_HOT, 1.0f - ignite));
     }
 }
 
-// The key relic floating above the shrine (until the player takes it; then it rises and fades).
+// The key, floating above the shrine until it is taken; then it rises and fades.
 void drawRelic(int cx, int y, float time, float alpha) {
-    int bob = (int)std::round(std::sin(time * 2.0f) * 2.0f);
-    int top = y + bob;
+    int top = y + (int)std::round(std::sin(time * 2.0f) * 2.0f);
     Color gold = withAlpha(RELIC_GOLD, alpha);
-    DrawCircleGradient(cx, top + 2, 16.0f, withAlpha(RELIC_GOLD, (0.3f + 0.12f * std::sin(time * 2.6f)) * alpha),
-                       withAlpha(RELIC_GOLD, 0.0f));
-    DrawRing(Vector2{(float)cx, (float)top}, 1.0f, 3.0f, 0.0f, 360.0f, 12, gold); // bow of the key
-    DrawRectangle(cx - 1, top + 2, 2, 6, gold);                                     // shaft
-    DrawRectangle(cx + 1, top + 5, 2, 1, gold);                                     // teeth
-    DrawRectangle(cx + 1, top + 7, 2, 1, gold);
+    DrawRing(Vector2{(float)cx, (float)top}, 1.0f, 3.0f, 0.0f, 360.0f, 12, gold);
+    DrawRectangle(cx - 1, top + 2, 2, 7, gold);
+    DrawRectangle(cx + 1, top + 6, 2, 1, gold);
+    DrawRectangle(cx + 1, top + 8, 2, 1, gold);
     for (int i = 0; i < 4; i++) { // sparkles circling it, dimmer behind the key
         float angle = time * 1.5f + i * 1.5708f;
         float depth = 0.55f + 0.45f * std::sin(angle);
         DrawRectangle(cx + (int)(std::cos(angle) * 9.0f), top + 3 + (int)(std::sin(angle) * 5.0f), 1, 1,
-                      withAlpha(FIRE_HOT, 0.8f * depth * alpha));
+                      withAlpha(FIRE_HOT, 0.85f * depth * alpha));
     }
-    float glint = std::fmod(time * 0.35f, 1.0f); // now and then a glint crosses the key
+    float glint = std::fmod(time * 0.35f, 1.0f); // now and then a glint runs down the key
     if (glint < 0.16f) {
         float a = std::sin(glint / 0.16f * 3.14159f) * alpha;
-        int gy = top + 2 + (int)(glint / 0.16f * 6.0f);
-        DrawRectangle(cx - 1, gy, 2, 1, withAlpha(WHITE, a));
-        DrawRectangle(cx + 2, top - 3, 1, 3, withAlpha(WHITE, a * 0.8f)); // a small star at the bow
+        DrawRectangle(cx - 1, top + 2 + (int)(glint / 0.16f * 6.0f), 2, 1, withAlpha(WHITE, a));
+        DrawRectangle(cx + 2, top - 3, 1, 3, withAlpha(WHITE, a * 0.8f));
         DrawRectangle(cx + 1, top - 2, 3, 1, withAlpha(WHITE, a * 0.8f));
     }
 }
 
-// The relic's light, carried by the traveler back through previous (canvas position).
 void drawKeyLight(Vector2 at, float alpha, float time) {
     float x = at.x + std::sin(time * 2.0f) * 2.0f;
     float y = at.y + std::sin(time * 3.1f) * 2.0f;
-    DrawCircleGradient((int)x, (int)y, 10.0f, withAlpha(COOL_LIGHT, 0.45f * alpha), withAlpha(COOL_LIGHT, 0.0f));
     DrawRectangle((int)x - 1, (int)y - 1, 2, 2, withAlpha(WHITE, alpha));
     DrawRectangle((int)x + 2, (int)y + 1, 1, 1, withAlpha(RELIC_GOLD, 0.9f * alpha));
+    DrawRectangle((int)x - 3, (int)y + 2, 1, 1, withAlpha(COOL_LIGHT, 0.8f * alpha));
 }
 
-void drawRuinDetails(RuinShape shape, const Ledge& l, const Silhouette& s, const SceneView& view) {
-    const int x0 = l.left;
-    const int x1 = l.left + l.width;
-    const int cx = x0 + l.width / 2;
-    const float time = view.time;
-    switch (shape) {
-        case RuinShape::Gatehouse:
-            drawMasonry(s, 4, 60, 9, 22, l.seed);
-            paintRows(s, 13, 15, STONE_LIGHT, 2); // carved band
-            for (int x = x0 + 4; x < x1 - 4; x += 5) DrawRectangle(x, l.top + 14, 2, 1, STONE_SHADE);
-            DrawRectangle(cx - 5, l.top + 22, 10, 14, STONE_SHADE); // a dark arched window
-            DrawCircleSector(Vector2{(float)cx, (float)(l.top + 22)}, 5.0f, 180.0f, 360.0f, 10, STONE_SHADE);
-            drawTopMoss(l, 6);
-            drawHangingRoot(x1 - 3, l.top + 2, 22, time, l.seed, ROOT);
-            drawHangingRoot(x0 + 8, l.top + 3, 14, time, l.seed + 3, MOSS_DARK);
-            break;
-        case RuinShape::BrokenArch: {
-            paintRows(s, 2, 3, STONE_LIGHT, 0); // parapet edge
-            const int radius = l.width / 2 - 26;
-            for (int i = 0; i <= 8; i++) { // voussoirs around the arch
-                float angle = 3.14159f + i * 3.14159f / 8.0f;
-                DrawRectangle(cx + (int)(std::cos(angle) * (radius + 3)), l.top + 8 + radius + (int)(std::sin(angle) * (radius + 3)),
-                              1, 2, STONE_SHADE);
-            }
-            DrawRectangle(cx - 2, l.top + 8, 4, 4, STONE_LIGHT); // keystone
-            drawMasonry(s, 14, 90, 8, 13, l.seed);
-            drawTopMoss(l, 4);
-            drawHangingRoot(x1 - 20, l.top + 8 + radius + 24, 18, time, l.seed, ROOT); // roots below the break
-            drawHangingRoot(x1 - 12, l.top + 8 + radius + 20, 26, time, l.seed + 1, ROOT);
-            break;
-        }
-        case RuinShape::Capital: {
-            paintRows(s, 0, 1, STONE_LIGHT, 0);
-            paintRows(s, 4, 5, STONE_SHADE, 0); // under the slab
-            for (int side = 0; side < 2; side++) { // scroll carvings at the corners
-                int vx = (side == 0) ? x0 + 6 : x1 - 9;
-                DrawRing(Vector2{vx + 1.5f, l.top + 8.0f}, 1.0f, 2.5f, 0.0f, 360.0f, 10, STONE_SHADE);
-            }
-            int left = 0;
-            int right = 0;
-            for (int dy = 14; dy < s.rows; dy++) { // fluting on the shaft
-                if (s.count[dy] == 0) continue;
-                left = s.spans[dy][0].left;
-                right = s.spans[dy][0].right;
-                int width = right - left;
-                for (int f = 1; f < 4; f++) {
-                    DrawRectangle(left + width * f / 4, l.top + dy, 1, 1, depthShade(f == 3 ? STONE_LIGHT : STONE_SHADE, dy, DEPTH));
-                }
-            }
-            for (int k = 0; k < 12; k++) DrawRectangle(cx + 4 + (k % 2) - k / 5, l.top + 20 + k, 1, 1, STONE_SHADE); // crack
-            drawTopMoss(l, 3);
-            drawHangingRoot(x0 + 10, l.top + 5, 16, time, l.seed, MOSS_DARK);
-            break;
-        }
-        case RuinShape::Shrine: {
-            drawMasonry(s, 3, 20, 6, 14, l.seed);
-            // The relic leaves when the key is taken (stage 1): it rises and fades, and the niche dims.
-            float relic = (view.stage == 0) ? 1.0f : ((view.stage == 1) ? 1.0f - smooth01(view.stageTime / 0.6f) : 0.0f);
-            Color niche = lerpColor(STONE_SHADE, RELIC_GOLD, 0.35f * relic);
-            DrawRectangle(cx - 6, l.top + 6, 12, 12, niche); // carved niche
-            DrawCircleSector(Vector2{(float)cx, (float)(l.top + 6)}, 6.0f, 180.0f, 360.0f, 10, niche);
-            paintRows(s, 20, 21, STONE_LIGHT, 0); // step edges
-            paintRows(s, 24, 25, STONE_LIGHT, 0);
-            for (int x = x0 + 7; x < x1 - 7; x += 6) DrawRectangle(x, l.top + 3, 3, 1, RELIC_GOLD); // a faded gold band
-            drawTopMoss(l, 3);
-            if (relic > 0.0f) drawRelic(cx, l.top - 22 - (int)((1.0f - relic) * 12.0f), time, relic);
-            break;
-        }
-        case RuinShape::Steps: {
-            for (int step = 0; step < 6; step++) { // each stair's lit edge
-                int dy = 4 + step * 6;
-                if (dy >= s.rows || s.count[dy] == 0) break;
-                int left = s.spans[dy][0].left;
-                DrawRectangle(left, l.top + dy, 7, 1, depthShade(STONE_LIGHT, dy, DEPTH));
-            }
-            drawMasonry(s, 4, 50, 6, 16, l.seed);
-            drawTopMoss(l, 5);
-            break;
-        }
-    }
-}
-
-// A ruined doorway around the exit. Rubble and roots block it until the objective is done;
-// then the fallen slab sinks away and the light comes through (open: 0 closed -> 1 open).
+// A ruined doorway around the exit. A fallen slab and roots block it until the end of the path is
+// reached; then the slab sinks away and warm light comes through (open: 0 -> 1).
 void drawRuinDoorway(Rectangle gate, int cameraX, float open, float time) {
     const int gx = toCanvasX(gate.x, cameraX);
     const int gy = toCanvasY(gate.y);
@@ -331,8 +616,7 @@ void drawRuinDoorway(Rectangle gate, int cameraX, float open, float time) {
 
     DrawRectangle(gx, gy, gw, gh, withAlpha(DARK, 1.0f - light));
     if (light > 0.0f) {
-        DrawCircleGradient(cx, gy + gh / 2, 30.0f + 16.0f * light, withAlpha(FIRE_HOT, 0.3f * light), withAlpha(FIRE_HOT, 0.0f));
-        DrawRectangleGradientV(gx, gy, gw, gh, withAlpha(FIRE_HOT, 0.92f * light), withAlpha(RELIC_GOLD, 0.6f * light));
+        DrawRectangleGradientV(gx, gy, gw, gh, withAlpha(FIRE_HOT, 0.92f * light), withAlpha(RELIC_GOLD, 0.65f * light));
         for (int i = 0; i < 6; i++) {
             float t = std::fmod(time * (0.35f + 0.1f * hash01(i * 3 + 4)) + i * 0.17f, 1.0f);
             DrawRectangle(gx + 2 + (int)(hash01(i * 5 + 21) * (gw - 4)), gy + gh - 2 - (int)(t * gh), 1, 1,
@@ -340,42 +624,40 @@ void drawRuinDoorway(Rectangle gate, int cameraX, float open, float time) {
         }
     }
     if (open < 1.0f) {
-        int sink = (int)std::round(open * open * (gh - gh / 3)); // the fallen slab sinks into the floor
+        int sink = (int)std::round(open * open * (gh - gh / 3));
         int slabTop = gy + gh / 3 + sink;
         int slabHeight = gh - gh / 3 - sink;
         if (slabHeight > 0) {
-            DrawRectangle(gx + 1, slabTop, gw - 2, slabHeight, STONE_DARK);
-            DrawRectangle(gx + 1, slabTop, gw - 2, 1, STONE);
-            for (int k = 0; k < 8 && 3 + k < slabHeight; k++) DrawRectangle(gx + 6 + (k % 2) + k / 3, slabTop + 3 + k, 1, 1, STONE_SHADE);
+            DrawRectangle(gx + 1, slabTop, gw - 2, slabHeight, STONE[1]);
+            DrawRectangle(gx + 1, slabTop, gw - 2, 1, STONE[3]);
+            for (int k = 0; k < 8 && 3 + k < slabHeight; k++) DrawRectangle(gx + 6 + (k % 2) + k / 3, slabTop + 3 + k, 1, 1, STONE[0]);
         }
         float roots = 1.0f - smooth01(open * 1.5f);
-        for (int r = 0; roots > 0.0f && r < 3; r++) { // roots across the opening, pulled away
+        for (int r = 0; roots > 0.0f && r < 3; r++) {
             for (int x = 0; x < gw; x++) {
-                int y = gy + 6 + r * 7 + (int)std::round(std::sin(x * 0.4f + r * 2.0f) * 1.5f);
-                DrawRectangle(gx + x, y, 1, 1, withAlpha(ROOT, roots));
+                DrawRectangle(gx + x, gy + 6 + r * 7 + (int)std::round(std::sin(x * 0.4f + r * 2.0f) * 1.5f), 1, 1, withAlpha(ROOT, roots));
             }
         }
-        float dust = std::sin(open * 3.14159f); // dust at the sill while the slab moves
+        float dust = std::sin(open * 3.14159f);
         for (int i = 0; dust > 0.01f && i < 6; i++) {
             DrawRectangle(gx + (int)(hash01(i * 7 + 3) * gw), gy + gh - 2 - (int)(hash01(i * 5 + 1) * 5.0f * open), 1, 1,
-                          withAlpha(STONE_LIGHT, 0.7f * dust));
+                          withAlpha(STONE[4], 0.7f * dust));
         }
     }
-
-    DrawRectangle(gx - 6, gy, 6, gh, STONE); // jambs, lit on the right
-    DrawRectangle(gx + gw, gy, 6, gh, STONE);
-    DrawRectangle(gx - 6, gy, 1, gh, STONE_SHADE);
-    DrawRectangle(gx + gw + 5, gy, 1, gh, STONE_LIGHT);
-    DrawRectangle(gx - 8, gy - 6, gw + 16, 6, STONE); // lintel
-    DrawRectangle(gx - 8, gy - 6, gw + 16, 1, STONE_LIGHT);
+    DrawRectangle(gx - 6, gy, 6, gh, STONE[3]); // jambs, lit on the left (the moon side)
+    DrawRectangle(gx + gw, gy, 6, gh, STONE[2]);
+    DrawRectangle(gx - 6, gy, 1, gh, STONE[5]);
+    DrawRectangle(gx + gw + 5, gy, 1, gh, STONE[0]);
+    DrawRectangle(gx - 8, gy - 6, gw + 16, 6, STONE[3]); // lintel
+    DrawRectangle(gx - 8, gy - 6, gw + 16, 1, STONE[5]);
     drawTriangleSafe(Vector2{(float)(gx - 8), (float)(gy - 6)}, Vector2{(float)cx, (float)(gy - 6)},
-                     Vector2{(float)(cx - 2), (float)(gy - 15)}, STONE); // half of a broken pediment
-    Color rune = lerpColor(STONE_SHADE, RELIC_GOLD, smooth01(open * 1.6f - 0.3f));
+                     Vector2{(float)(cx - 2), (float)(gy - 15)}, STONE[3]); // half of a broken pediment
+    Color rune = lerpColor(STONE[1], RELIC_GOLD, smooth01(open * 1.6f - 0.3f));
     for (int k = 0; k < 3; k++) {
         DrawRectangle(gx - 4, gy + 6 + k * 9, 2, 2, rune);
         DrawRectangle(gx + gw + 2, gy + 6 + k * 9, 2, 2, rune);
     }
-    for (int row = 0; row < 16; row++) { // a tattered banner on the left jamb
+    for (int row = 0; row < 16; row++) { // a tattered banner on the jamb
         int sway = (int)std::round(std::sin(time * 1.6f + row * 0.25f) * (row / 16.0f) * 2.0f);
         int width = (row < 13) ? 6 : 6 - (row - 12) * 2;
         DrawRectangle(gx - 13 + sway, gy - 2 + row, width, 1, (row % 5 == 0) ? BANNER_DARK : BANNER);
@@ -383,207 +665,83 @@ void drawRuinDoorway(Rectangle gate, int cameraX, float open, float time) {
     DrawRectangle(gx - 14, gy - 3, 8, 1, RELIC_GOLD);
 }
 
-// ---------------------------------------------------------------------------
-// Background layers
-// ---------------------------------------------------------------------------
-
-void drawRuinsSky(int scroll, float time) {
-    DrawRectangleGradientV(0, 0, CANVAS_WIDTH, 170, SKY_TOP, SKY_MID);
-    DrawRectangleGradientV(0, 170, CANVAS_WIDTH, CANVAS_HEIGHT - 170, SKY_MID, SKY_LOW);
-    for (int i = 0; i < 60; i++) { // stars
-        int x = (int)(hash01(i * 7 + 1) * CANVAS_WIDTH);
-        int y = (int)(hash01(i * 13 + 2) * 150.0f);
-        float twinkle = 0.5f + 0.5f * std::sin(time * 1.7f + i * 2.3f);
-        DrawRectangle(x, y, 1, 1, withAlpha(MOON, (0.3f + 0.7f * hash01(i * 5)) * (0.4f + 0.6f * twinkle)));
-    }
-    int mx = 470 - (int)(scroll * 0.04f);
-    int my = 62;
-    DrawCircleGradient(mx, my, 130.0f, withAlpha(MOON, 0.16f), withAlpha(MOON, 0.0f));
-    DrawCircleGradient(mx, my, 40.0f, withAlpha(MOON, 0.3f), withAlpha(MOON, 0.0f));
-    DrawCircle(mx, my, 15.0f, MOON);
-    DrawCircle(mx - 4, my - 3, 3.0f, lerpColor(MOON, SKY_LOW, 0.3f)); // craters
-    DrawCircle(mx + 5, my + 4, 2.0f, lerpColor(MOON, SKY_LOW, 0.3f));
+float ledgeMist(const SceneView& view, const Node& node) {
+    if (view.mistById == nullptr || node.id < 0 || node.id > MAX_NODES_PER_REGION) return 0.0f;
+    return view.mistById[node.id];
 }
 
-// A distant drowned city: towers and a broken aqueduct, softened by haze. A few windows are lit.
-void drawFarCity(int scroll, float time) {
-    float offset = std::floor(scroll * 0.14f); // whole pixels: towers and aqueduct move together, no crawl
-    Color window = lerpColor(FAR_RUINS, SKY_LOW, 0.5f);
-    const float towerSpacing = 56.0f;
-    int first = (int)std::floor(offset / towerSpacing) - 1;
-    for (int i = first; i < first + 14; i++) {
-        int x = (int)std::floor(i * towerSpacing + hash01(i * 7 + 3) * 24.0f - offset);
-        int width = 12 + (int)(hash01(i * 11 + 5) * 12.0f);
-        int height = 50 + (int)(hash01(i * 17 + 9) * 70.0f);
-        int top = 232 - height;
-        DrawRectangle(x, top, width, height, FAR_RUINS);
-        DrawRectangle(x + width / 2, top - 6, width / 2, 6, FAR_RUINS); // broken top
-        for (int w = 0; w < 3; w++) {
-            Color pane = window;
-            if (hash01(i * 13 + w * 7) > 0.8f) { // someone's fire, far away
-                float flicker = 0.55f + 0.3f * std::sin(time * (2.0f + w) + i * 1.7f) + 0.15f * std::sin(time * 7.3f + i);
-                pane = lerpColor(window, FIRE, 0.55f * flicker);
-            }
-            DrawRectangle(x + width / 2 - 1, top + 10 + w * 14, 2, 4, pane);
-        }
-    }
-    const float pierSpacing = 34.0f; // the aqueduct
-    first = (int)std::floor(offset / pierSpacing) - 1;
-    for (int i = first; i < first + 22; i++) {
-        if (hash01(i * 23 + 1) > 0.82f) continue; // a fallen span
-        float x = i * pierSpacing - offset;
-        DrawRectangle((int)x, 168, (int)pierSpacing + 1, 8, FAR_RUINS);
-        DrawRectangle((int)x, 176, 6, 56, FAR_RUINS);
-        DrawRing(Vector2{x + 20.0f, 190.0f}, 11.0f, 14.0f, 180.0f, 360.0f, 14, FAR_RUINS);
-    }
-    DrawRectangleGradientV(0, 150, CANVAS_WIDTH, 110, withAlpha(MIST, 0.0f), withAlpha(MIST, 0.35f));
-    DrawRectangle(0, 260, CANVAS_WIDTH, WATERLINE - 260, withAlpha(MIST, 0.35f)); // the haze continues to the water
-}
-
-void drawMoonbeams(int scroll, float time) {
-    float offset = scroll * 0.2f;
-    for (int i = 0; i < 3; i++) {
-        float topX = 420.0f + i * 60.0f - offset;
-        float width = 12.0f + i * 8.0f;
-        float alpha = 0.045f + 0.02f * std::sin(time * 0.5f + i * 2.1f);
-        for (int segment = 0; segment < 3; segment++) {
-            float y0 = segment * 100.0f;
-            float y1 = y0 + 100.0f;
-            float x0 = topX - 110.0f * (y0 / 300.0f);
-            float x1 = topX - 110.0f * (y1 / 300.0f);
-            Color light = withAlpha(MOON, alpha * (1.0f - segment * 0.3f));
-            drawTriangleSafe(Vector2{x0, y0}, Vector2{x0 + width, y0}, Vector2{x1 + width, y1}, light);
-            drawTriangleSafe(Vector2{x0, y0}, Vector2{x1 + width, y1}, Vector2{x1, y1}, light);
-        }
-    }
-}
-
-// Great broken arches in the middle distance, with banners, vines, and braziers.
-// For each burning brazier it writes x (canvas) and its flicker (in y), so the water can
-// reflect it. Returns how many it wrote.
-int drawMidArches(int scroll, float time, Vector2* fires, int maxFires) {
-    int fireCount = 0;
-    float offset = std::floor(scroll * 0.4f);
-    const float spacing = 150.0f;
-    int first = (int)std::floor(offset / spacing) - 1;
-    for (int i = first; i < first + 6; i++) {
-        float x = std::floor(i * spacing + hash01(i * 19 + 4) * 40.0f - offset);
-        int radius = 34 + (int)(hash01(i * 29 + 6) * 12.0f);
-        int springY = 120 + (int)(hash01(i * 31 + 8) * 40.0f);
-        bool broken = hash01(i * 37 + 2) > 0.5f;
-        const int pillar = 16;
-        int leftX = (int)x - radius - pillar / 2;
-        int rightX = (int)x + radius - pillar / 2;
-        int rightTop = broken ? springY + 36 : springY;
-
-        DrawRectangle(leftX, springY, pillar, WATERLINE - springY, MID_RUINS);
-        DrawRectangle(rightX, rightTop, pillar, WATERLINE - rightTop, MID_RUINS);
-        DrawRectangle(leftX + pillar - 1, springY, 1, WATERLINE - springY, MID_RUINS_LIT);
-        DrawRectangle(rightX + pillar - 1, rightTop, 1, WATERLINE - rightTop, MID_RUINS_LIT);
-        DrawRing(Vector2{x, (float)springY}, (float)(radius - pillar / 2), (float)(radius + pillar / 2), 180.0f,
-                 broken ? 285.0f : 360.0f, 28, MID_RUINS);
-        DrawRectangle(leftX - 2, springY - 4, pillar + 4, 4, MID_RUINS); // capitals
-        if (!broken) {
-            DrawRectangle(rightX - 2, springY - 4, pillar + 4, 4, MID_RUINS);
-            for (int row = 0; row < 26; row++) { // a banner from the crown
-                int sway = (int)std::round(std::sin(time * 1.3f + i + row * 0.2f) * (row / 26.0f) * 3.0f);
-                int width = (row < 22) ? 10 : 10 - (row - 21) * 3;
-                if (width > 0) DrawRectangle((int)x - 5 + sway, springY - radius + 4 + row, width, 1,
-                                             (row % 6 == 0) ? BANNER_DARK : lerpColor(BANNER, MID_RUINS, 0.35f));
-            }
-        } else { // a brazier still burning on the broken pillar
-            float flicker = 0.8f + 0.12f * std::sin(time * 12.0f + i) + 0.08f * std::sin(time * 19.3f + i * 2.7f);
-            int bx = rightX + pillar / 2;
-            DrawCircleGradient(bx, rightTop - 4, 30.0f, withAlpha(FIRE, 0.28f * flicker), withAlpha(FIRE, 0.0f));
-            DrawRectangle(rightX + 3, rightTop - 3, pillar - 6, 3, MID_RUINS_LIT);
-            for (int f = 0; f < 3; f++) { // flame tongues licking at different speeds
-                int height = 2 + (int)((0.5f + 0.5f * std::sin(time * (8.0f + f * 2.9f) + i + f * 1.7f)) * 4.0f);
-                DrawRectangle(bx - 3 + f * 2, rightTop - 3 - height, 2, height, withAlpha((f == 1) ? FIRE_HOT : FIRE, flicker));
-            }
-            for (int e = 0; e < 2; e++) { // embers drifting up
-                float t = std::fmod(time * (0.6f + 0.2f * e) + i * 0.37f + e * 0.5f, 1.0f);
-                DrawRectangle(bx - 1 + e * 2 + (int)(std::sin(time * 2.0f + e + i) * 2.0f), rightTop - 8 - (int)(t * 18.0f), 1, 1,
-                              withAlpha(FIRE_HOT, loopEnvelope(t)));
-            }
-            if (fireCount < maxFires) fires[fireCount++] = Vector2{(float)bx, flicker};
-        }
-        for (int v = 0; v < 3; v++) { // vines hanging from the arch
-            int vx = (int)x - radius + 10 + v * radius * 2 / 3;
-            drawHangingRoot(vx, springY - radius + 8 + v * 4, 18 + v * 6, time, i * 3 + v, lerpColor(MOSS_DARK, MID_RUINS, 0.4f));
-        }
-    }
-    DrawRectangleGradientV(0, 190, CANVAS_WIDTH, 102, withAlpha(MIST, 0.0f), withAlpha(MIST, 0.22f));
-    return fireCount;
-}
-
-// Still water below the route, with the moon's reflection and the braziers' fire on it.
-void drawWaterBack(int scroll, float time, const Vector2* fires, int fireCount) {
-    DrawRectangleGradientV(0, WATERLINE, CANVAS_WIDTH, CANVAS_HEIGHT - WATERLINE, WATER, WATER_DEEP);
-    int mx = 470 - (int)(scroll * 0.04f);
-    for (int y = WATERLINE + 1; y < CANVAS_HEIGHT; y += 2) {
-        float depth = (y - WATERLINE) / (float)(CANVAS_HEIGHT - WATERLINE);
-        int width = 10 - (int)(depth * 7.0f);
-        int wobble = (int)std::round(std::sin(time * 2.0f + y * 0.35f) * 2.0f);
-        DrawRectangle(mx - width / 2 + wobble, y, width, 1, withAlpha(MOON, 0.4f * (1.0f - depth)));
-    }
-    for (int f = 0; f < fireCount; f++) { // short, broken streaks of firelight under each brazier
-        for (int y = WATERLINE + 2; y < WATERLINE + 30; y += 3) {
-            float depth = (y - WATERLINE) / 30.0f;
-            int wobble = (int)std::round(std::sin(time * 2.6f + y * 0.5f + f) * 2.0f);
-            int width = 5 - (int)(depth * 3.0f);
-            DrawRectangle((int)fires[f].x - width / 2 + wobble, y, width, 1, withAlpha(FIRE, 0.35f * fires[f].y * (1.0f - depth)));
-        }
-    }
-}
-
-} // namespace
-
-// ---------------------------------------------------------------------------
-// Region 2 drawing
-// ---------------------------------------------------------------------------
-
-void drawRuinsBackground(const SceneView& view) {
-    drawRuinsSky(view.scroll, view.time);
-    drawFarCity(view.scroll, view.time);
-    drawMoonbeams(view.scroll, view.time);
-    Vector2 fires[6];
-    int fireCount = drawMidArches(view.scroll, view.time, fires, 6);
-    drawWaterBack(view.scroll, view.time, fires, fireCount);
-}
-
-void drawRuinsPlatforms(const SceneView& view) {
-    // Both links of the current node, each checked for NULL before use.
-    const Node* next = (view.current != nullptr) ? view.current->next : nullptr;
-    const Node* previous = (view.current != nullptr) ? view.current->previous : nullptr;
-
-    // The back-step to N2 makes previous the bright link and next the dim one. The swap eases in
-    // over a moment when the step starts (stage 1) and when it ends (stage 2).
+// How strongly the back-step is shown: previous bright and next dim while the key's light is carried.
+float previousEmphasis(const SceneView& view) {
     float emphasis = view.emphasizePrevious ? 1.0f : 0.0f;
     if (view.stage == 1 || view.stage == 2) {
         float k = smooth01(view.stageTime / 0.6f);
         emphasis = (1.0f - k) * (1.0f - emphasis) + k * emphasis;
     }
-    float arrival = arrivalEase(view);
+    return emphasis;
+}
+
+// When the key is taken, a wave of cool light runs back along the path: N4 -> N3 -> N2.
+float returnWave(const SceneView& view, const Node& node) {
+    if (view.stage != 1 || view.stageTime > 3.0f) return 0.0f;
+    float delay = (node.id == 3) ? 0.35f : (node.id == 2 ? 0.8f : -1.0f);
+    if (delay < 0.0f) return 0.0f;
+    float t = view.stageTime - delay;
+    return (t > 0.0f && t < 1.4f) ? std::sin(t / 1.4f * 3.14159f) : 0.0f;
+}
+
+// ---------------------------------------------------------------------------
+// Region 2 drawing
+// ---------------------------------------------------------------------------
+
+void drawRuinsBackground(const SceneView& view, const RegionArt& art) {
+    const float time = view.time;
+    drawBackLayers(view, art, SKY_LAYER, FAR_LAYER, 0.0f);
+    for (int i = 0; i < 24; i++) { // a few stars that twinkle
+        int x = (int)(hash01(i * 17 + 3) * CANVAS_WIDTH);
+        int y = 6 + (int)(hash01(i * 19 + 5) * 150.0f);
+        float twinkle = 0.5f + 0.5f * std::sin(time * (1.2f + hash01(i)) + i * 2.3f);
+        DrawRectangle(x, y, 1, 1, withAlpha(MOON, 0.25f + 0.6f * twinkle));
+    }
+    drawBackLayers(view, art, FAR_LAYER, MID_LAYER, 0.0f);
+    for (int i = 0; i < 4; i++) { // haze drifting over the drowned city
+        float x = std::fmod(i * 250.0f + time * 3.0f - view.scroll * 0.2f + 4000.0f, 1000.0f) - 180.0f;
+        DrawEllipse((int)x, 250 + (i % 2) * 22, 160.0f, 12.0f, withAlpha(MIST, 0.06f));
+    }
+    drawBackLayers(view, art, MID_LAYER, NEAR_LAYER, 0.8f);
+    for (int i = 0; i < ARCH_COUNT; i++) { // braziers still burning on the broken pillars
+        Arch a = archAt(i);
+        if (!a.broken) continue;
+        float bx = layerToScreen(a.x + a.radius, view.scroll, PARALLAX[MID_LAYER]);
+        int top = a.springY + 34 - 4;
+        for (int f = 0; f < 3; f++) {
+            int height = 2 + (int)((0.5f + 0.5f * std::sin(time * (8.0f + f * 2.9f) + i + f * 1.7f)) * 4.0f);
+            DrawRectangle((int)bx - 3 + f * 2, top - height, 2, height, (f == 1) ? FIRE_HOT : FIRE);
+        }
+        for (int e = 0; e < 2; e++) {
+            float t = std::fmod(time * (0.6f + 0.2f * e) + i * 0.37f + e * 0.5f, 1.0f);
+            DrawRectangle((int)bx - 1 + e * 2 + (int)(std::sin(time * 2.0f + e + i) * 2.0f), top - 6 - (int)(t * 18.0f), 1, 1,
+                          withAlpha(FIRE_HOT, loopEnvelope(t)));
+        }
+    }
+    DrawRectangleGradientV(0, 190, CANVAS_WIDTH, WATERLINE - 190, withAlpha(MIST, 0.0f), withAlpha(MIST, 0.18f));
+    drawBackLayers(view, art, NEAR_LAYER, LAYER_COUNT, 0.9f);
+}
+
+void drawRuinsPlatforms(const SceneView& view, const RegionArt& art) {
+    drawLedges(view, art, VEIL);
+
+    const Node* next = (view.current != nullptr) ? view.current->next : nullptr; // each link checked before use
+    const Node* previous = (view.current != nullptr) ? view.current->previous : nullptr;
+    const float emphasis = previousEmphasis(view);
+    const float arrival = arrivalEase(view);
     Vector2 brazier = {0.0f, 0.0f};
     bool brazierSeen = false;
 
-    // Walk the real list from its head, with a bound.
     const Node* node = view.head;
-    int steps = 0;
-    while (node != nullptr && steps < MAX_NODES_PER_REGION) {
+    for (int steps = 0; node != nullptr && steps < MAX_NODES_PER_REGION; steps++) {
         Ledge ledge = ledgeFor(*node, view.cameraX);
         if (ledgeOnScreen(ledge)) {
-            float mist = 0.0f;
-            if (view.mistById != nullptr && node->id >= 0 && node->id <= MAX_NODES_PER_REGION) {
-                mist = view.mistById[node->id];
-            }
-            RuinShape shape = shapeFor(*node);
-            Silhouette outline = buildRuinSilhouette(shape, ledge);
-            fillSilhouette(outline, RUIN_STONE, true);
-            drawRuinDetails(shape, ledge, outline, view);
-
-            // The Old Hall's brazier: cold at first, waiting while you carry the light back, then lit.
-            if (node->id == 2) {
+            if (node->id == 2) { // the Old Hall's brazier: cold, then waiting for the key's light, then lit
                 int bx = ledge.left + ledge.width - 14;
                 float ignite = (view.stage >= 2) ? view.stageTime / 0.8f : 0.0f;
                 float waiting = (view.stage == 1) ? 1.0f : ((view.stage == 2) ? std::fmax(0.0f, 1.0f - view.stageTime / 0.4f) : 0.0f);
@@ -591,21 +749,24 @@ void drawRuinsPlatforms(const SceneView& view) {
                 brazier = Vector2{(float)(bx + 4), (float)(ledge.top - 11)};
                 brazierSeen = true;
             }
-            drawMistVeil(outline, mist, VEIL); // drawn last, so the brazier fades with its ledge too
-            if (node == next) drawNextGlow(ledge, view.time, (1.0f - 0.55f * emphasis) * arrival);
-            if (node == previous) drawPreviousGlow(ledge, view.time, (0.55f + 0.45f * emphasis) * arrival);
+            if (node->id == 4) { // the key above the shrine; it rises and fades when taken
+                float relic = (view.stage == 0) ? 1.0f : ((view.stage == 1) ? 1.0f - smooth01(view.stageTime / 0.6f) : 0.0f);
+                if (relic > 0.0f) drawRelic(ledge.left + ledge.width / 2, ledge.top - 24 - (int)((1.0f - relic) * 12.0f), view.time, relic);
+            }
+            if (node == next) drawLinkLip(ledge, WARM_LIGHT, (1.0f - 0.55f * emphasis) * arrival, view.time, true);
+            if (node == previous) drawLinkLip(ledge, COOL_LIGHT, (0.5f + 0.5f * emphasis) * arrival, view.time, false);
+            float wave = returnWave(view, *node);
+            if (wave > 0.0f) drawLinkLip(ledge, COOL_LIGHT, wave, view.time, false);
         }
         node = node->next;
-        steps++;
     }
 
     if (view.checkpoint != nullptr) {
         Ledge ledge = ledgeFor(*view.checkpoint, view.cameraX);
         drawLanternPost(ledge.left + 6, ledge.top, view.checkpointFlash, view.time);
     }
-    // The key's light: it appears with the traveler when the key is taken, and when the traveler
-    // reaches N2 it flies into the brazier, which catches as it arrives.
-    Vector2 carried = {view.playerFeet.x - 10.0f, view.playerFeet.y - 34.0f};
+    // The key's light travels with the traveler, and at N2 it flies into the brazier.
+    Vector2 carried = {view.playerFeet.x - 10.0f, view.playerFeet.y - 32.0f};
     if (view.stage == 1) {
         drawKeyLight(carried, smooth01(view.stageTime / 0.5f), view.time);
     } else if (view.stage == 2 && brazierSeen && view.stageTime < 0.35f) {
@@ -613,67 +774,145 @@ void drawRuinsPlatforms(const SceneView& view) {
         Vector2 at = {carried.x + (brazier.x - carried.x) * k, carried.y + (brazier.y - carried.y) * k - std::sin(k * 3.14159f) * 10.0f};
         drawKeyLight(at, 1.0f - 0.4f * k, view.time);
     }
-    if (view.hasGate) {
-        drawRuinDoorway(view.gateRect, view.cameraX, view.gateProgress, view.time);
+    if (view.hasGate) drawRuinDoorway(view.gateRect, view.cameraX, view.gateProgress, view.time);
+}
+
+// The water: the scene above, reflected and rippling, with the current flowing to the right.
+void drawRuinsWater(const SceneView& view, const RegionArt&, const Texture2D& reflection) {
+    const float time = view.time;
+    const int depth = CANVAS_HEIGHT - WATERLINE;
+    DrawRectangleGradientV(0, WATERLINE, CANVAS_WIDTH, depth, WATER_TOP, WATER_DEEP);
+    for (int y = WATERLINE; y < CANVAS_HEIGHT; y++) {
+        int k = y - WATERLINE;
+        int row = WATERLINE - 1 - k; // the row of the scene mirrored at this depth
+        if (row < 0) break;
+        float wave = std::sin(time * 1.7f + y * 0.55f) + 0.5f * std::sin(time * 2.9f - y * 0.9f);
+        int wobble = (int)std::lround(wave * (0.6f + k * 0.07f));
+        float fade = 1.0f - (float)k / depth;
+        Color tint = {150, 172, 214, (unsigned char)(255.0f * (0.62f * fade + 0.12f))};
+        DrawTextureRec(reflection, Rectangle{(float)wobble, (float)(CANVAS_HEIGHT - 1 - row), (float)CANVAS_WIDTH, 1.0f},
+                       Vector2{0.0f, (float)y}, tint);
+    }
+    DrawRectangle(0, WATERLINE, CANVAS_WIDTH, 1, withAlpha(MOON, 0.3f));
+    for (int i = 0; i < 40; i++) { // ripples catching the moonlight, drifting with the current
+        float x = std::fmod(hash01(i * 7 + 2) * 760.0f + time * (5.0f + (i % 3) * 2.5f) - view.scroll + 3800.0f, 760.0f) - 60.0f;
+        int y = WATERLINE + 2 + (int)(hash01(i * 11 + 5) * (depth - 3));
+        float shimmer = 0.5f + 0.5f * std::sin(time * (1.4f + 0.6f * hash01(i * 3)) + i * 2.3f);
+        int width = 4 + (int)(hash01(i * 13 + 1) * 12.0f) + (int)std::round(shimmer * 2.0f);
+        DrawRectangle((int)x, y, width, 1, withAlpha(MOON, 0.06f + 0.12f * shimmer));
+        if (i % 7 == 0) { // a floating leaf, bobbing on the ripple
+            DrawRectangle((int)x + 2, y - 1 + (int)std::round(std::sin(time * 1.7f + i) * 0.6f), 2, 1, MOSS[2]);
+        }
+    }
+    for (int y = WATERLINE + 1; y < CANVAS_HEIGHT; y += 2) { // the moon's path on the water
+        float k = (y - WATERLINE) / (float)depth;
+        int width = 3 + (int)(k * 9.0f);
+        int wobble = (int)std::round(std::sin(time * 2.0f + y * 0.35f) * (1.0f + k * 3.0f));
+        DrawRectangle((int)MOON_X - width / 2 + wobble, y, width, 1, withAlpha(MOON, 0.32f * (1.0f - k)));
+    }
+    for (int i = 0; i < 5; i++) { // low mist over the water
+        float x = std::fmod(i * 190.0f + time * 4.0f - view.scroll * 1.05f + 4000.0f, 990.0f) - 170.0f;
+        DrawEllipse((int)x, WATERLINE - 3 + (i % 2) * 6, 100.0f + (i % 3) * 30.0f, 8.0f, withAlpha(MIST, 0.1f));
     }
 }
 
-void drawRuinsForeground(const SceneView& view) {
-    const int scroll = view.scroll;
+void drawRuinsForeground(const SceneView& view, const RegionArt& art) {
     const float time = view.time;
-
-    // The water covers the platforms' feet, with ripples and floating leaves.
-    DrawRectangleGradientV(0, WATERLINE, CANVAS_WIDTH, CANVAS_HEIGHT - WATERLINE, withAlpha(WATER, 0.55f),
-                           withAlpha(WATER_DEEP, 0.9f));
-    DrawRectangle(0, WATERLINE, CANVAS_WIDTH, 1, withAlpha(MOON, 0.22f));
-    for (int i = 0; i < 34; i++) { // ripples that catch the moonlight, brightening and stretching as they drift
-        float x = std::fmod(hash01(i * 7 + 2) * 760.0f + time * (4.0f + (i % 3) * 2.0f) - scroll + 3800.0f, 760.0f) - 60.0f;
-        int y = WATERLINE + 3 + (int)(hash01(i * 11 + 5) * 60.0f);
-        float shimmer = 0.5f + 0.5f * std::sin(time * (1.4f + 0.6f * hash01(i * 3)) + i * 2.3f);
-        int width = 5 + (int)(hash01(i * 13 + 1) * 12.0f) + (int)std::round(shimmer * 2.0f);
-        DrawRectangle((int)x, y, width, 1, withAlpha(STONE_LIGHT, 0.08f + 0.14f * shimmer));
-        if (i % 6 == 0) { // a floating leaf, bobbing on the ripple
-            int bob = (int)std::round(std::sin(time * 1.7f + i) * 0.6f);
-            DrawRectangle((int)x + 2, y - 1 + bob, 2, 1, withAlpha(MOSS, 0.8f));
-        }
+    for (int i = 0; i < 26; i++) { // dust floating in the moonlight
+        float x = std::fmod(hash01(i * 17 + 3) * 900.0f - view.scroll * 0.9f + time * 3.0f + 3600.0f, 900.0f) - 100.0f;
+        float y = 50.0f + hash01(i * 5 + 8) * 220.0f + std::sin(time * 0.6f + i) * 6.0f;
+        DrawRectangle((int)x, (int)y, 1, 1, withAlpha(MOON, 0.2f + 0.25f * std::sin(time * 2.0f + i)));
     }
-    for (int i = 0; i < 5; i++) { // low mist over the water (wraps only once it is fully off screen)
-        float x = std::fmod(i * 190.0f + time * 4.0f - scroll * 1.05f + 4000.0f, 990.0f) - 170.0f;
-        DrawEllipse((int)x, WATERLINE - 4 + (i % 2) * 6, 100.0f + (i % 3) * 30.0f, 8.0f, withAlpha(MIST, 0.1f));
-    }
-
-    // Dust floating in the moonlight.
-    for (int i = 0; i < 22; i++) {
-        float x = std::fmod(hash01(i * 17 + 3) * 900.0f - scroll * 0.9f + time * 3.0f + 3600.0f, 900.0f) - 100.0f;
-        float y = 60.0f + hash01(i * 5 + 8) * 200.0f + std::sin(time * 0.6f + i) * 6.0f;
-        DrawRectangle((int)x, (int)y, 1, 1, withAlpha(MOON, 0.25f + 0.25f * std::sin(time * 2.0f + i)));
-    }
-
-    // Near silhouettes: a broken column at the start, hanging roots, and reeds.
-    float offset = scroll * 1.3f;
-    {
-        float x = 14.0f - offset;
-        if (x > -40.0f) {
-            DrawRectangle((int)x - 14, 70, 28, CANVAS_HEIGHT, DARK);
-            DrawRectangle((int)x - 18, 62, 36, 8, DARK);
-            DrawRectangle((int)x + 12, 70, 2, CANVAS_HEIGHT, withAlpha(MID_RUINS_LIT, 0.6f));
-        }
-    }
-    for (int i = 0; i < 12; i++) {
-        float x = i * 70.0f + hash01(i * 3 + 7) * 30.0f - scroll * 1.15f;
-        if (x < -20.0f || x > CANVAS_WIDTH + 20.0f) continue;
-        drawHangingRoot((int)x, 0, 24 + (int)(hash01(i * 9 + 1) * 40.0f), time, i, DARK);
-    }
-    for (int i = 0; i < 30; i++) {
-        float x = i * 36.0f + hash01(i * 5 + 4) * 14.0f - offset;
-        if (x < -10.0f || x > CANVAS_WIDTH + 10.0f) continue;
-        int height = 12 + (int)(hash01(i * 7 + 9) * 22.0f);
-        int sway = (int)std::round(std::sin(time * 1.4f + i) * 1.5f);
-        DrawLineEx(Vector2{x, CANVAS_HEIGHT + 2.0f}, Vector2{x + sway, (float)(CANVAS_HEIGHT - height)}, 2.0f, DARK);
-        DrawRectangle((int)x + sway - 1, CANVAS_HEIGHT - height - 4, 3, 5, DARK); // reed head
-    }
-
-    DrawRectangleGradientH(0, 0, 70, CANVAS_HEIGHT, withAlpha(DARK, 0.5f), withAlpha(DARK, 0.0f));
-    DrawRectangleGradientH(CANVAS_WIDTH - 70, 0, 70, CANVAS_HEIGHT, withAlpha(DARK, 0.0f), withAlpha(DARK, 0.5f));
+    drawFrontLayers(view, art, 0.8f);
     DrawRectangleGradientV(0, 0, CANVAS_WIDTH, 50, withAlpha(DARK, 0.55f), withAlpha(DARK, 0.0f));
 }
+
+void drawRuinsAdditive(const SceneView& view, const RegionArt&, const SceneRenderer& renderer) {
+    const float time = view.time;
+    renderer.drawSoftLight(Vector2{MOON_X, MOON_Y}, 150.0f, MOON, 0.18f);
+    renderer.drawSoftLight(Vector2{MOON_X, MOON_Y}, 44.0f, MOON, 0.3f);
+    for (int i = 0; i < 3; i++) { // moonbeams slanting down through the broken vaults
+        float top = 120.0f + i * 110.0f - view.scroll * 0.2f;
+        float width = 14.0f + i * 7.0f;
+        float alpha = 0.05f + 0.02f * std::sin(time * 0.5f + i * 2.1f);
+        Color topColor = withAlpha(MOON, alpha);
+        Color clear = withAlpha(MOON, 0.0f);
+        drawGradientQuad(Vector2{top, 0.0f}, Vector2{top + width, 0.0f}, Vector2{top + width + 110.0f, (float)WATERLINE},
+                         Vector2{top + 110.0f, (float)WATERLINE}, topColor, topColor, clear, clear);
+    }
+}
+
+void addRuinsLights(const SceneView& view, const RegionArt&, std::vector<Light>& lights) {
+    const Node* next = (view.current != nullptr) ? view.current->next : nullptr;
+    const Node* previous = (view.current != nullptr) ? view.current->previous : nullptr;
+    const float emphasis = previousEmphasis(view);
+    const float arrival = arrivalEase(view);
+    const float time = view.time;
+    const Node* node = view.head;
+    for (int steps = 0; node != nullptr && steps < MAX_NODES_PER_REGION; steps++) {
+        Ledge ledge = ledgeFor(*node, view.cameraX);
+        if (ledgeOnScreen(ledge)) {
+            if (node == next) addLinkLight(lights, ledge, WARM_LIGHT, (1.0f - 0.55f * emphasis) * arrival);
+            if (node == previous) addLinkLight(lights, ledge, COOL_LIGHT, (0.5f + 0.5f * emphasis) * arrival);
+            float wave = returnWave(view, *node);
+            if (wave > 0.0f) addLinkLight(lights, ledge, COOL_LIGHT, wave);
+            if (node->id == 2 && view.stage >= 2) {
+                float grow = smooth01(view.stageTime / 0.8f);
+                float flare = (view.stageTime < 0.8f) ? std::sin(view.stageTime / 0.8f * 3.14159f) : 0.0f;
+                float flicker = 0.85f + 0.1f * std::sin(time * 13.0f) + 0.05f * std::sin(time * 21.7f);
+                lights.push_back(Light{Vector2{ledge.left + ledge.width - 10.0f, ledge.top - 12.0f}, 70.0f + 30.0f * flare,
+                                       FIRE, (0.62f * grow + 0.4f * flare) * flicker, 12.0f + 10.0f * flare, 0.5f * grow + 0.4f * flare});
+            } else if (node->id == 2 && view.stage == 1) {
+                lights.push_back(Light{Vector2{ledge.left + ledge.width - 10.0f, ledge.top - 10.0f}, 26.0f, COOL_LIGHT, 0.3f, 6.0f, 0.25f});
+            }
+            if (node->id == 4) {
+                float relic = (view.stage == 0) ? 1.0f : ((view.stage == 1) ? 1.0f - smooth01(view.stageTime / 0.6f) : 0.0f);
+                if (relic > 0.0f) {
+                    lights.push_back(Light{Vector2{ledge.left + ledge.width * 0.5f, ledge.top - 20.0f}, 44.0f, RELIC_GOLD,
+                                           0.45f * relic, 10.0f, (0.35f + 0.1f * std::sin(time * 2.6f)) * relic});
+                }
+            }
+        }
+        node = node->next;
+    }
+    for (int i = 0; i < ARCH_COUNT; i++) {
+        Arch a = archAt(i);
+        if (!a.broken) continue;
+        float bx = layerToScreen(a.x + a.radius, view.scroll, PARALLAX[MID_LAYER]);
+        float flicker = 0.8f + 0.12f * std::sin(time * 12.0f + i) + 0.08f * std::sin(time * 19.3f + i * 2.7f);
+        lights.push_back(Light{Vector2{bx, a.springY + 26.0f}, 40.0f, FIRE, 0.35f * flicker, 9.0f, 0.4f * flicker});
+    }
+    if (view.checkpoint != nullptr) {
+        Ledge ledge = ledgeFor(*view.checkpoint, view.cameraX);
+        addLanternLight(lights, ledge.left + 6, ledge.top, view.checkpointFlash, time);
+    }
+    if (view.stage == 1) {
+        float a = smooth01(view.stageTime / 0.5f);
+        lights.push_back(Light{Vector2{view.playerFeet.x - 10.0f, view.playerFeet.y - 32.0f}, 40.0f, COOL_LIGHT, 0.45f * a, 8.0f, 0.5f * a});
+    }
+    if (view.hasGate && view.gateProgress > 0.0f) {
+        float light = smooth01(view.gateProgress);
+        float x = (float)toCanvasX(view.gateRect.x + view.gateRect.width / 2.0f, view.cameraX);
+        float y = (float)toCanvasY(view.gateRect.y + view.gateRect.height / 2.0f);
+        lights.push_back(Light{Vector2{x, y}, 80.0f * light, FIRE_HOT, 0.55f * light, 24.0f * light, 0.45f * light});
+    }
+}
+
+Mood ruinsMood(const SceneView&) {
+    Mood mood;
+    mood.skyLight = WHITE;
+    mood.groundLight = Color{118, 130, 170, 255};
+    mood.lightFrom = 90;
+    mood.lightTo = 300;
+    mood.shadowTint = Vector3{0.86f, 0.94f, 1.12f};
+    mood.highlightTint = Vector3{1.07f, 1.0f, 0.92f};
+    mood.saturation = 1.02f;
+    mood.bloom = 0.75f;
+    mood.vignette = 0.42f;
+    return mood;
+}
+
+} // namespace
+
+const RegionPainter RUINS_PAINTER = {bakeRuins, drawRuinsBackground, drawRuinsPlatforms, drawRuinsWater,
+                                     drawRuinsForeground, drawRuinsAdditive, addRuinsLights, ruinsMood};

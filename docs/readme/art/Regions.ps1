@@ -429,8 +429,8 @@ function Write-Ruins {
 
 # ---------------------------------------------------------------------------
 # Region 3, The Endless Garden: circular singly linked list. The traveler is on the
-# tail (N4). Its next is the head, so warm light rises from N1, and a light runs
-# along the great root from the tail's hollow back to the head. N2 and N3 are mist.
+# tail (N4). Its next is the head, so warm light rises from N1, and a luminous current
+# of water and petals flows from the tail's hollow back to the head. N2 and N3 are mist.
 # ---------------------------------------------------------------------------
 
 $Garden = @{
@@ -561,9 +561,9 @@ function Garden-Details($layer, [string]$shape, [int]$x0, [int]$w, [int]$top, [i
     }
 }
 
-# The great root from the tail's hollow to the head: a thick cubic curve with a lit top.
-# $p = @(x0, y0, x1, y1, x2, y2, x3, y3).
-function Paint-Root($layer, [double[]]$p) {
+# The current from the tail's hollow to the head: a stream of glowing water along a cubic
+# curve, deep at the edges and bright along its middle. $p = @(x0, y0, x1, y1, x2, y2, x3, y3).
+function Paint-Current($layer, [double[]]$p) {
     $g = $Garden
     $pts = @()
     for ($k = 0; $k -le 200; $k++) {
@@ -573,15 +573,14 @@ function Paint-Root($layer, [double[]]$p) {
         $y = $u * $u * $u * $p[1] + 3 * $u * $u * $t * $p[3] + 3 * $u * $t * $t * $p[5] + $t * $t * $t * $p[7]
         $pts += , @($x, $y)
     }
-    foreach ($q in $pts) { Disc $layer $q[0] $q[1] 3.2 $g.BarkDark }
-    foreach ($q in $pts) { Disc $layer $q[0] ($q[1] - 0.5) 2.1 $g.Bark }
-    foreach ($q in $pts) { Dot $layer (I $q[0]) (I ($q[1] - 2.2)) $g.BarkLight }
-    for ($k = 12; $k -lt $pts.Count; $k += 23) { Fill $layer (I $pts[$k][0]) (I ($pts[$k][1] - 3)) 3 1 $g.Moss }
+    foreach ($q in $pts) { Disc $layer $q[0] $q[1] 2.0 (Mix $g.Spring $g.Depth 0.55) }
+    foreach ($q in $pts) { Disc $layer $q[0] $q[1] 1.1 $g.Spring }
+    foreach ($q in $pts) { Dot $layer (I $q[0]) (I ($q[1] - 1)) (Mix $g.Spring '#ffffff' 0.5) }
 }
 
 function Write-Garden {
     $g = $Garden
-    Card-Begin 'Region 3, The Endless Garden: a moonlit garden where the ledges form a circular singly linked list. The traveler stands on the tail, N4; its next is the head, so warm light rises from N1 and a light runs along the great root from the tail back to the head.'
+    Card-Begin 'Region 3, The Endless Garden: a moonlit garden where the ledges form a circular singly linked list. The traveler stands on the tail, N4; its next is the head, so warm light rises from N1, and a glowing current carries petals from the hollow in the tail back to the head.'
     Def-Traveler
     Def-Overlays
     Def-Wisp
@@ -589,7 +588,7 @@ function Write-Garden {
     Def-Glow 'gMoon' $g.Moon 0.3
     Def-Glow 'gSpring' $g.Spring 0.32
     Def-Glow 'gHollow' $WarmLight 0.5
-    Def-Glow 'rootMote' $WarmLight 0.6
+    Def-Glow 'petalGlow' $g.Petal 0.55
     Def-Linear 'gHaze' @("0 $($g.Mist) 0", "1 $($g.Mist) 0.28")
     Anim '.star' 'twinkle' 3.4 'ease-in-out'
 
@@ -632,7 +631,7 @@ function Write-Garden {
     Add (Layer-Svg $sp)
     for ($i = 0; $i -lt 5; $i++) { Add "<rect class=`"mote`" style=`"animation-delay:-$(N ($i * 0.5))s`" x=`"$(120 + $i * 8)`" y=`"118`" width=`"1`" height=`"1`" fill=`"$($g.Spring)`"/>" }
 
-    # N2 and N3 sit behind the root and are mist: from the tail, only N4 and its next (N1) are solid.
+    # N2 and N3 are mist: from the tail, only N4 and its next (N1) are solid.
     $ledges = @(
         @('Terrace', 6, 44, 98, 31), @('MoonCap', 66, 38, 88, 32), @('Planter', 120, 42, 96, 33), @('RootKnot', 182, 44, 86, 34)
     )
@@ -647,20 +646,24 @@ function Write-Garden {
         Add (Layer-Svg $layers[$k])
         Add (Mask-Svg $layers[$k] $g.Veil ' fill-opacity=".62"')
     }
-    $rootPath = @(188, 102, 158, 116, 80, 116, 40, 104)
-    $root = New-Layer $CardW $CardH
-    Paint-Root $root $rootPath
-    Add (Layer-Svg $root)
+    $flowPath = @(190, 100, 176, 121, 80, 121, 44, 104) # from the hollow, through the spring, into the head's basin
+    $flow = New-Layer $CardW $CardH
+    Paint-Current $flow $flowPath
+    Add (Layer-Svg $flow)
     Add (Layer-Svg $layers[0])
     Add (Layer-Svg $layers[3])
     Add (Glow 190 97 9 'gHollow' ' class="pulse"')
     Add (LinkGlow-Svg 6 44 98 'next') # tail->next is the head
 
-    # A light runs along the great root, from the tail's hollow to the head.
-    $d = "M$($rootPath[0]) $($rootPath[1]) C$($rootPath[2]) $($rootPath[3]) $($rootPath[4]) $($rootPath[5]) $($rootPath[6]) $($rootPath[7])"
-    Add ("<g class=`"smil`" opacity=`"0`">" + (Glow 0 0 7 'rootMote') + (Rect -1 -1 2 2 '#fff4c8') +
-        "<animateMotion dur=`"3.6s`" repeatCount=`"indefinite`" path=`"$d`" keyPoints=`"0;1;1`" keyTimes=`"0;0.8;1`" calcMode=`"linear`"/>" +
-        '<animate attributeName="opacity" values="0;1;1;0;0" keyTimes="0;0.08;0.72;0.8;1" dur="3.6s" repeatCount="indefinite"/></g>')
+    # Petals ride the current from the tail's hollow back to the head.
+    $d = "M$($flowPath[0]) $($flowPath[1]) C$($flowPath[2]) $($flowPath[3]) $($flowPath[4]) $($flowPath[5]) $($flowPath[6]) $($flowPath[7])"
+    for ($i = 0; $i -lt 5; $i++) {
+        $petal = @($g.Petal, $g.Blossom, '#ffffff')[$i % 3]
+        $begin = N (-$i * 0.8)
+        Add ("<g class=`"smil`" opacity=`"0`">" + (Glow 0 0 4 'petalGlow') + (Rect -1 -1 2 1 $petal) +
+            "<animateMotion dur=`"4s`" begin=`"${begin}s`" repeatCount=`"indefinite`" path=`"$d`" calcMode=`"linear`"/>" +
+            "<animate attributeName=`"opacity`" values=`"0;1;1;0`" keyTimes=`"0;0.1;0.85;1`" dur=`"4s`" begin=`"${begin}s`" repeatCount=`"indefinite`"/></g>")
+    }
 
     Add (Traveler-Idle 208 86 -Mirror)
     AddCss '@keyframes toHollow { 0%, 100% { transform: translate(0px,0px) } 50% { transform: translate(-14px,12px) } }'

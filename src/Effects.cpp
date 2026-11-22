@@ -42,6 +42,16 @@ void drawParticles(const ParticlePool& pool, int cameraX) {
     }
 }
 
+void drawParticleGlows(const ParticlePool& pool, int cameraX, const SceneRenderer& renderer) {
+    for (const Particle& p : pool.items) {
+        if (p.life <= 0.0f || p.maxLife <= 0.0f || !p.glows) continue;
+        float fade = p.life / p.maxLife;
+        float alpha = p.gathering ? 0.25f + 0.75f * (1.0f - fade) : std::fmin(1.0f, fade / 0.4f);
+        Vector2 at = {std::floor(p.position.x / 2.0f) - cameraX + 0.5f, std::floor(p.position.y / 2.0f) + 0.5f};
+        renderer.drawSoftLight(at, 4.0f + p.size * 2.0f, p.color, 0.4f * alpha);
+    }
+}
+
 void spawnDust(ParticlePool& pool, Vector2 feet, int count, Color color) {
     for (int i = 0; i < count; i++) {
         float side = (i % 2 == 0) ? -1.0f : 1.0f;
@@ -59,7 +69,7 @@ void spawnDust(ParticlePool& pool, Vector2 feet, int count, Color color) {
 }
 
 void spawnBurst(ParticlePool& pool, Vector2 at, int count, Color first, Color second, float speed, float gravity,
-                float life) {
+                float life, bool glows) {
     for (int i = 0; i < count; i++) {
         float angle = -3.14159f * (0.1f + 0.8f * hash01(i * 31 + (int)at.x)); // mostly upward
         float strength = speed * (0.5f + 0.7f * hash01(i * 17 + (int)at.y));
@@ -71,6 +81,7 @@ void spawnBurst(ParticlePool& pool, Vector2 at, int count, Color first, Color se
         p.life = p.maxLife = life * (0.7f + 0.6f * hash01(i * 5 + 3));
         p.size = (i % 3 == 0) ? 2.0f : 1.0f;
         p.color = (i % 2 == 0) ? first : second;
+        p.glows = glows;
         spawnParticle(pool, p);
     }
 }
@@ -88,6 +99,7 @@ void spawnGather(ParticlePool& pool, Vector2 at, int count, Color color) {
         p.size = 2.0f;
         p.color = color;
         p.gathering = true;
+        p.glows = true;
         spawnParticle(pool, p);
     }
 }

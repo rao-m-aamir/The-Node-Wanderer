@@ -13,15 +13,18 @@
 constexpr int SCREEN_WIDTH = 1280;
 constexpr int SCREEN_HEIGHT = 720;
 
-// Region 3 traversal stops when current == start, or after this many steps.
+// Region 3 traversal stops when current == start. This many steps is only a safety fallback,
+// in case the start is never reached.
 constexpr int MAX_LOOP_STEPS = 12;
 
 // Timings in seconds (shared by the rules, the scene, and the interface).
 constexpr float RECOVERY_FADE_SECONDS = 0.6f;
 constexpr float TRANSITION_OUT_SECONDS = 0.6f;
+constexpr float TRANSITION_HOLD_SECONDS = 1.3f; // a dark beat that names the place ahead
 constexpr float TRANSITION_IN_SECONDS = 0.9f;
-constexpr float TITLE_CARD_SECONDS = 2.6f;
-constexpr float PASSAGE_SECONDS = 1.1f;      // Region 3: travelling through the root
+constexpr float TITLE_CARD_SECONDS = TRANSITION_HOLD_SECONDS + 1.8f;
+constexpr float CALLOUT_SECONDS = 7.0f;
+constexpr float PASSAGE_SECONDS = 1.8f;      // Region 3: carried back along the current
 constexpr float BRIDGE_BUILD_SECONDS = 1.6f; // Region 4: the new bridge assembling
 constexpr float GATE_OPEN_SECONDS = 1.2f;    // an exit opening once its objective is done
 
@@ -29,6 +32,9 @@ enum class GameState { Playing, Message, Paused, Complete };
 
 // The mark drawn on a journal note, so each kind of message is recognizable by shape, not only color.
 enum class NoteKind { Intro, Question, Answer, Recovery, Info };
+
+// The first time each kind of link is used, a short journal callout names it (with one code line).
+enum class Callout { FollowNext, FollowPrevious, LoopBack, NullLink, Append, Count };
 
 // A short timer for a visual flash (checkpoint lantern). Visual only.
 struct Pulse {
@@ -51,6 +57,7 @@ public:
 
 private:
     // Stage flow
+    void checkRouteJumps() const;
     void resetStage();
     void enterRegion(int index);
     void startTransition(int target); // fade out, switch to `target` (REGION_COUNT = completion), fade in
@@ -78,20 +85,25 @@ private:
     Vector2 playerFeet() const;
     void spawnArrivalEffects(bool viaPrevious);
     Color dustColor() const;
+    float regionWind() const;
 
     // Scene (GameScene.cpp)
     SceneView makeSceneView() const;
     void drawScene() const;
-    void drawWispHint(const SceneView& view) const;
+    const Node* guideNode() const; // where the guiding light leads from the current node (may be null)
+    void addTravelerLights(const SceneView& view, std::vector<Light>& lights) const;
 
     // Interface (GameUi.cpp)
     void showMessage(std::vector<std::string> newPages, NoteKind kind);
-    void showToast(const std::string& text, float seconds = 2.5f);
+    void showToast(const std::string& text, float seconds = 4.0f);
+    void showCallout(Callout which); // only the first time `which` happens on this journey
+    void startJourney();             // a new game or a replay: hold on the first place's name, then fade in
     const char* currentObjective() const;
     void drawHud() const;
-    void drawProgressPips() const;
+    void drawJournalHint() const;
     void drawControlsStrip() const;
     void drawToast() const;
+    void drawCallout() const;
     void drawInteractionPrompt() const;
     void drawInspector() const;
     void drawMessageBox() const;
@@ -124,7 +136,8 @@ private:
     bool visitedIds[MAX_NODES_PER_REGION + 1] = {};
     float ledgeMist[MAX_NODES_PER_REGION + 1] = {}; // 1 = platform veiled because it is not solid now
 
-    RenderTexture2D sceneCanvas = {}; // the pixel canvas (owned; unloaded in ~Game)
+    SceneRenderer renderer; // the pixel canvas, light map, and final pass (owned; unloaded in ~Game)
+    RegionArt regionArt;    // the active region's painted scenery and platforms (owned)
     ParticlePool particles;
 
     std::vector<std::string> pages; // current journal note pages
@@ -142,6 +155,11 @@ private:
     float transitionTimer = 0.0f;
     bool transitionSwitched = false;
     float titleCardTimer = 0.0f;   // > 0 while the region's name is shown
+    bool calloutSeen[(int)Callout::Count] = {};
+    Callout calloutShown = Callout::FollowNext;
+    float calloutTimer = 0.0f;     // > 0 while a callout is shown
+    bool journeyStarted = false;   // the first link has been followed: the controls strip fades out
+    float journeyTimer = 0.0f;     // seconds since then
     Pulse checkpointPulse = {};
     float elapsed = 0.0f;
 };

@@ -2,24 +2,71 @@
 
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 
 #include "DrawHelpers.h"
 #include "Theme.h"
 
-// The interface. In play: small dark cards (objective, progress, code line, controls).
-// For reading: an explorer's field journal (inspector, notes, pause, and the summary).
+// The interface speaks in two voices.
+//   While exploring: a small card with the place and what to do, a journal hint, short lines,
+//   and the controls at the start of the journey. None of it mentions code.
+//   In the field journal: the current node's real links, the list walked from its head, what
+//   the place teaches, and a brief callout the first time each kind of link is used.
 // Every list detail shown here is read from the real active list.
 
 namespace {
 
-const Color CODE_BLUE = {150, 230, 255, 255};
+const Color CODE_INK = {34, 74, 128, 255}; // code written on journal paper
+
+// The line under each place's name in the dark beat between places.
+const char* const REGION_LINES[REGION_COUNT] = {
+    "Each step leads to the next.",
+    "Every stone remembers the way back.",
+    "Every path here returns to where it began.",
+    "Look before you step.",
+};
+
+// What each place teaches, in the journal's voice.
+const char* const REGION_LESSONS[REGION_COUNT] = {
+    "A singly linked list: each node stores one link, next.\n"
+    "You can only walk forward. The tail's next is NULL.",
+    "A doubly linked list: each node stores next and previous,\n"
+    "so you can walk both ways. head->previous and\n"
+    "tail->next are both NULL.",
+    "A circular list: the tail's next points back to the head,\n"
+    "so no next is NULL. The walk stops when current == start;\n"
+    "the step limit is only a safety fallback.",
+    "nullptr means there is no node. Following it is undefined\n"
+    "behavior, so check first:\n"
+    "if (current->next != nullptr) current = current->next;",
+};
+
+struct CalloutText {
+    const char* title;
+    const char* code;
+    const char* line;
+};
+
+const CalloutText CALLOUTS[(int)Callout::Count] = {
+    {"You followed next", "current = current->next;",
+     "Each ledge links to the one after it. Tab opens your journal."},
+    {"You followed previous", "current = current->previous;",
+     "Here each ledge also links back to the one before it."},
+    {"The tail's next is the head", "current = current->next;",
+     "A circle has no NULL: the walk stops when current == start."},
+    {"N3's next is NULL", "current->next == nullptr",
+     "There is no node past the edge. Check a link before you follow it."},
+    {"append() added the bridge", "tail->next = newNode;",
+     "N3's next points to a node now, so the bridge will hold."},
+};
 
 // A key cap followed by an action, e.g. [TAB] journal. Returns the width used.
-float drawKeyHint(const char* key, const char* action, float x, float y, Color capColor, Color keyColor, Color actionColor) {
+float drawKeyHint(const char* key, const char* action, float x, float y, Color capColor, Color keyColor, Color actionColor,
+                  float alpha = 1.0f) {
     int keyWidth = MeasureText(key, 10) + 10;
-    DrawRectangleRounded(Rectangle{x, y, (float)keyWidth, 14.0f}, 0.3f, 4, capColor);
-    DrawText(key, (int)(x + 5.0f), (int)(y + 2.0f), 10, keyColor);
-    DrawText(action, (int)(x + keyWidth + 6.0f), (int)(y + 2.0f), 10, actionColor);
+    DrawRectangleRounded(Rectangle{x, y, (float)keyWidth, 14.0f}, 0.3f, 4, Fade(capColor, alpha));
+    DrawText(key, (int)(x + 5.0f), (int)(y + 2.0f), 10, Fade(keyColor, alpha));
+    DrawText(action, (int)(x + keyWidth + 6.0f), (int)(y + 2.0f), 10, Fade(actionColor, alpha));
     return keyWidth + 6.0f + MeasureText(action, 10);
 }
 
@@ -27,16 +74,43 @@ float measureKeyHint(const char* key, const char* action) {
     return MeasureText(key, 10) + 10.0f + 6.0f + MeasureText(action, 10);
 }
 
+// Draws text split at '\n', `spacing` pixels apart. Returns the number of lines.
+int drawLines(const char* text, float x, float y, int size, float spacing, Color color) {
+    char line[160];
+    int lines = 0;
+    const char* start = text;
+    while (true) {
+        const char* end = std::strchr(start, '\n');
+        size_t length = (end != nullptr) ? (size_t)(end - start) : std::strlen(start);
+        if (length >= sizeof(line)) length = sizeof(line) - 1;
+        std::memcpy(line, start, length);
+        line[length] = '\0';
+        DrawText(line, (int)x, (int)(y + lines * spacing), size, color);
+        lines++;
+        if (end == nullptr) break;
+        start = end + 1;
+    }
+    return lines;
+}
+
+int countLines(const char* text) {
+    int lines = 1;
+    for (; *text != '\0'; text++) {
+        if (*text == '\n') lines++;
+    }
+    return lines;
+}
+
 // A sheet of journal paper with a soft shadow and a darker edge.
-void drawParchment(Rectangle r) {
-    DrawRectangleRounded(Rectangle{r.x + 4.0f, r.y + 5.0f, r.width, r.height}, 0.06f, 6, Fade(BLACK, 0.35f));
-    DrawRectangleRounded(r, 0.06f, 6, PARCHMENT);
+void drawParchment(Rectangle r, float alpha = 1.0f) {
+    DrawRectangleRounded(Rectangle{r.x + 4.0f, r.y + 5.0f, r.width, r.height}, 0.06f, 6, Fade(BLACK, 0.35f * alpha));
+    DrawRectangleRounded(r, 0.06f, 6, Fade(PARCHMENT, alpha));
     DrawRectangleRoundedLinesEx(Rectangle{r.x + 4.0f, r.y + 4.0f, r.width - 8.0f, r.height - 8.0f}, 0.06f, 6, 1.0f,
-                                Fade(PARCHMENT_SHADE, 0.9f));
+                                Fade(PARCHMENT_SHADE, 0.9f * alpha));
     for (int i = 0; i < 26; i++) { // paper flecks
         int x = (int)(r.x + 8.0f + hash01(i * 7 + (int)r.width) * (r.width - 16.0f));
         int y = (int)(r.y + 8.0f + hash01(i * 13 + (int)r.height) * (r.height - 16.0f));
-        DrawRectangle(x, y, 2, 2, Fade(PARCHMENT_SHADE, 0.5f));
+        DrawRectangle(x, y, 2, 2, Fade(PARCHMENT_SHADE, 0.5f * alpha));
     }
 }
 
@@ -47,29 +121,35 @@ void drawStopMark(float x, float y, Color color) {
 }
 
 // The mark on a journal note: each kind of note has its own shape.
-void drawNoteMark(NoteKind kind, float x, float y, Color ink) {
-    DrawCircleV(Vector2{x, y}, 15.0f, Fade(ink, 0.15f));
-    DrawRing(Vector2{x, y}, 13.0f, 15.0f, 0.0f, 360.0f, 28, ink);
+void drawNoteMark(NoteKind kind, float x, float y, Color ink, float alpha = 1.0f) {
+    Color mark = Fade(ink, alpha);
+    DrawCircleV(Vector2{x, y}, 15.0f, Fade(ink, 0.15f * alpha));
+    DrawRing(Vector2{x, y}, 13.0f, 15.0f, 0.0f, 360.0f, 28, mark);
     switch (kind) {
-        case NoteKind::Question: DrawText("?", (int)x - 5, (int)y - 10, 20, ink); break;
-        case NoteKind::Answer: DrawText("!", (int)x - 3, (int)y - 10, 20, ink); break;
+        case NoteKind::Question: DrawText("?", (int)x - 5, (int)y - 10, 20, mark); break;
+        case NoteKind::Answer: DrawText("!", (int)x - 3, (int)y - 10, 20, mark); break;
         case NoteKind::Recovery: // a lantern
-            DrawRectangle((int)x - 4, (int)y - 6, 8, 11, ink);
-            DrawRectangle((int)x - 2, (int)y - 4, 4, 7, GILT);
-            DrawRectangle((int)x - 1, (int)y - 9, 2, 3, ink);
+            DrawRectangle((int)x - 4, (int)y - 6, 8, 11, mark);
+            DrawRectangle((int)x - 2, (int)y - 4, 4, 7, Fade(GILT, alpha));
+            DrawRectangle((int)x - 1, (int)y - 9, 2, 3, mark);
             break;
         case NoteKind::Intro: // a compass star
-            DrawPoly(Vector2{x, y}, 4, 9.0f, 0.0f, ink);
-            DrawPoly(Vector2{x, y}, 4, 4.0f, 45.0f, GILT);
+            DrawPoly(Vector2{x, y}, 4, 9.0f, 0.0f, mark);
+            DrawPoly(Vector2{x, y}, 4, 4.0f, 45.0f, Fade(GILT, alpha));
             break;
-        default: // a quill dot
-            DrawCircleV(Vector2{x, y}, 4.0f, ink);
+        default: // an open book
+            DrawRectangle((int)x - 8, (int)y - 5, 7, 10, mark);
+            DrawRectangle((int)x + 1, (int)y - 5, 7, 10, mark);
+            DrawRectangle((int)x - 6, (int)y - 3, 4, 1, Fade(PARCHMENT, alpha));
+            DrawRectangle((int)x + 3, (int)y - 3, 4, 1, Fade(PARCHMENT, alpha));
+            DrawRectangle((int)x - 6, (int)y, 4, 1, Fade(PARCHMENT, alpha));
+            DrawRectangle((int)x + 3, (int)y, 4, 1, Fade(PARCHMENT, alpha));
             break;
     }
 }
 
 // The journal's "walk from head" line is made of tokens such as N1, ->, NULL.
-enum class TokenStyle { Plain, Current, Null, LoopEnd, Arrow };
+enum class TokenStyle { Plain, Unvisited, Current, Null, LoopEnd, Arrow };
 
 struct Token {
     char text[24];
@@ -98,6 +178,7 @@ int layoutTokens(const Token* tokens, int count, float x, float y, float maxX, b
         if (draw) {
             Color color = INK;
             if (tokens[i].style == TokenStyle::Arrow) color = INK_SOFT;
+            if (tokens[i].style == TokenStyle::Unvisited) color = Fade(INK_SOFT, 0.75f); // not walked yet
             if (tokens[i].style == TokenStyle::LoopEnd) color = ink;
             if (tokens[i].style == TokenStyle::Null) color = INK_NULL;
             if (tokens[i].style == TokenStyle::Current) { // the node you are on: a gold box around it
@@ -162,8 +243,10 @@ void Game::draw() const {
     // instead of switching to the next region's HUD while the screen is black.
     if (state != GameState::Complete) {
         drawHud();
+        drawJournalHint();
         if (inspectorOpen) drawInspector();
         drawToast();
+        drawCallout();
         drawInteractionPrompt();
         if (state == GameState::Playing) drawControlsStrip();
         if (state == GameState::Message) drawMessageBox();
@@ -172,9 +255,9 @@ void Game::draw() const {
     if (fadeTimer > 0.0f) {
         DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, Fade(BLACK, fadeTimer / RECOVERY_FADE_SECONDS));
     }
-    if (transitionTarget >= 0) { // fade out, then back in
+    if (transitionTarget >= 0) { // fade out, hold in the dark, then fade back in
         float alpha = transitionSwitched
-                          ? 1.0f - (transitionTimer - TRANSITION_OUT_SECONDS) / TRANSITION_IN_SECONDS
+                          ? 1.0f - (transitionTimer - TRANSITION_OUT_SECONDS - TRANSITION_HOLD_SECONDS) / TRANSITION_IN_SECONDS
                           : transitionTimer / TRANSITION_OUT_SECONDS;
         DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, Fade(BLACK, std::fmin(1.0f, std::fmax(0.0f, alpha))));
     }
@@ -183,12 +266,12 @@ void Game::draw() const {
         return;
     }
 
-    drawTitleCard(); // the region's name rises over the fade-in
+    drawTitleCard(); // the place's name, over the dark beat and the fade-in
     if (state == GameState::Paused) drawPauseScreen();
 }
 
 // ---------------------------------------------------------------------------
-// In-play HUD
+// While exploring
 // ---------------------------------------------------------------------------
 
 // Top left: where you are and what to do.
@@ -196,95 +279,76 @@ void Game::drawHud() const {
     const RegionInfo& region = world.getRegion(regionIndex);
     const RegionStyle& style = REGION_STYLES[regionIndex];
 
-    char regionLine[96];
-    std::snprintf(regionLine, sizeof(regionLine), "REGION %d  -  %s", regionIndex + 1, TextToUpper(region.placeName));
+    char placeLine[96];
+    std::snprintf(placeLine, sizeof(placeLine), "%s", TextToUpper(region.placeName));
     char kindLine[64];
     std::snprintf(kindLine, sizeof(kindLine), "%s", TextToUpper(region.title));
     const char* objective = currentObjective();
 
-    int width = MeasureText(regionLine, 10) + 16 + MeasureText(kindLine, 10);
+    int width = MeasureText(placeLine, 10) + 16 + MeasureText(kindLine, 10);
     int objectiveWidth = MeasureText(objective, 20);
     if (objectiveWidth > width) width = objectiveWidth;
 
     Rectangle card = {12.0f, 10.0f, width + 40.0f, 50.0f};
-    DrawRectangleRounded(card, 0.25f, 6, Fade(UI_NAVY, 0.8f));
+    DrawRectangleRounded(card, 0.25f, 6, Fade(UI_NAVY, 0.78f));
     DrawRectangleRounded(Rectangle{card.x + 10.0f, card.y + 10.0f, 3.0f, 30.0f}, 1.0f, 4, style.accent);
-    DrawText(regionLine, (int)card.x + 22, (int)card.y + 9, 10, style.accent);
-    DrawText(kindLine, (int)card.x + 22 + MeasureText(regionLine, 10) + 16, (int)card.y + 9, 10, UI_DIM_TEXT);
+    DrawText(placeLine, (int)card.x + 22, (int)card.y + 9, 10, style.accent);
+    DrawText(kindLine, (int)card.x + 22 + MeasureText(placeLine, 10) + 16, (int)card.y + 9, 10, UI_DIM_TEXT);
     DrawText(objective, (int)card.x + 22, (int)card.y + 22, 20, OBJECTIVE_YELLOW);
-
-    if (!inspectorOpen) drawProgressPips();
 }
 
-// Top right: the active list as small marks, walked from head through the real next links.
-// The current node is a gold diamond, visited nodes are filled dots, the rest are rings.
-// The walk ends at NULL (with a stop mark) or, in a circle, back at the head.
-void Game::drawProgressPips() const {
-    const RegionStyle& style = REGION_STYLES[regionIndex];
-    Node* head = world.getHead(regionIndex);
-
-    int count = 0;
-    bool loops = false;
-    Node* node = head;
-    while (node != nullptr && count < MAX_NODES_PER_REGION) {
-        count++;
-        node = node->next;
-        if (node == head) {
-            loops = true; // circular list: the walk stops when it is back at the head
-            break;
-        }
+// Top right: where the journal and the pause menu are.
+void Game::drawJournalHint() const {
+    if (inspectorOpen) {
+        return; // the journal itself is open there
     }
-
-    const float gap = 18.0f;
-    const char* endLabel = loops ? "BACK TO HEAD" : "NULL";
-    char steps[64];
-    std::snprintf(steps, sizeof(steps), "STEPS %d / MAX %d   STOP WHEN current == N1", loopSteps, MAX_LOOP_STEPS);
-    float width = 28.0f + MeasureText("HEAD", 10) + 10.0f + count * gap + 6.0f + MeasureText(endLabel, 10) + (loops ? 14.0f : 16.0f);
-    if (regionIndex == 2 && width < MeasureText(steps, 10) + 28.0f) width = MeasureText(steps, 10) + 28.0f;
-    Rectangle card = {SCREEN_WIDTH - 12.0f - width, 10.0f, width, (regionIndex == 2) ? 46.0f : 30.0f};
-    DrawRectangleRounded(card, 0.3f, 6, Fade(UI_NAVY, 0.8f));
-
-    float x = card.x + 14.0f;
-    float y = card.y + 15.0f;
-    DrawText("HEAD", (int)x, (int)y - 4, 10, UI_DIM_TEXT);
-    x += MeasureText("HEAD", 10) + 10.0f;
-    node = head;
-    for (int i = 0; i < count && node != nullptr; i++) {
-        Vector2 pip = {x + i * gap + 4.0f, y};
-        if (i + 1 < count) DrawLineEx(Vector2{pip.x + 6.0f, y}, Vector2{pip.x + gap - 6.0f, y}, 1.0f, Fade(UI_DIM_TEXT, 0.6f));
-        bool visited = node->id >= 0 && node->id <= MAX_NODES_PER_REGION && visitedIds[node->id];
-        if (node == player.currentNode) {
-            DrawPoly(pip, 4, 6.5f, 0.0f, CURRENT_GOLD);
-        } else if (visited) {
-            DrawCircleV(pip, 3.5f, style.accent);
-        } else {
-            DrawRing(pip, 2.5f, 4.0f, 0.0f, 360.0f, 16, Fade(UI_DIM_TEXT, 0.9f));
-        }
-        node = node->next;
-    }
-    x += count * gap + 6.0f;
-    if (loops) {
-        DrawRing(Vector2{x + 3.0f, y}, 3.0f, 4.5f, 40.0f, 330.0f, 14, style.accent); // a loop mark
-        DrawText(endLabel, (int)x + 12, (int)y - 4, 10, style.accent);
-    } else {
-        DrawPoly(Vector2{x + 4.0f, y}, 8, 5.0f, 22.5f, NULL_AMBER); // stop mark
-        DrawRectangle((int)x + 2, (int)y - 1, 5, 2, UI_NAVY);
-        DrawText(endLabel, (int)x + 13, (int)y - 4, 10, NULL_AMBER);
-    }
-    if (regionIndex == 2) DrawText(steps, (int)card.x + 14, (int)card.y + 30, 10, UI_DIM_TEXT);
+    float width = 24.0f + measureKeyHint("TAB", "journal") + 16.0f + measureKeyHint("ESC", "pause");
+    Rectangle card = {SCREEN_WIDTH - 12.0f - width, 10.0f, width, 26.0f};
+    DrawRectangleRounded(card, 0.4f, 6, Fade(UI_NAVY, 0.7f));
+    float x = card.x + 12.0f;
+    x += drawKeyHint("TAB", "journal", x, card.y + 6.0f, UI_TEXT, OUTLINE_DARK, UI_DIM_TEXT) + 16.0f;
+    drawKeyHint("ESC", "pause", x, card.y + 6.0f, UI_TEXT, OUTLINE_DARK, UI_DIM_TEXT);
 }
 
-// The code line for the last move, e.g. "current = current->next;   N2 -> N3".
+// A short line about what just happened, under the objective (exploring voice).
 void Game::drawToast() const {
     if (toastTimer <= 0.0f || toastText.empty()) {
         return;
     }
-    float alpha = toastTimer < 0.4f ? toastTimer / 0.4f : 1.0f;
+    float alpha = toastTimer < 0.5f ? toastTimer / 0.5f : 1.0f;
     int width = MeasureText(toastText.c_str(), 20);
-    float y = 68.0f;
-    DrawRectangleRounded(Rectangle{12.0f, y, width + 30.0f, 30.0f}, 0.3f, 4, Fade(UI_NAVY, 0.85f * alpha));
-    DrawRectangle(22, (int)y + 7, 3, 16, Fade(REGION_STYLES[regionIndex].accent, alpha));
-    DrawText(toastText.c_str(), 32, (int)y + 5, 20, Fade(CODE_BLUE, alpha));
+    float y = 66.0f;
+    DrawRectangleRounded(Rectangle{12.0f, y, width + 34.0f, 30.0f}, 0.3f, 4, Fade(UI_NAVY, 0.78f * alpha));
+    DrawCircleV(Vector2{25.0f, y + 15.0f}, 3.0f, Fade(REGION_STYLES[regionIndex].accent, alpha));
+    DrawText(toastText.c_str(), 36, (int)y + 5, 20, Fade(UI_TEXT, alpha));
+}
+
+// The first time a kind of link is used: a slip from the journal naming it, with one code line.
+void Game::drawCallout() const {
+    if (calloutTimer <= 0.0f || inspectorOpen) {
+        return;
+    }
+    const CalloutText& text = CALLOUTS[(int)calloutShown];
+    const RegionStyle& style = REGION_STYLES[regionIndex];
+    float shown = CALLOUT_SECONDS - calloutTimer;
+    float alpha = std::fmin(1.0f, shown / 0.35f) * std::fmin(1.0f, calloutTimer / 0.6f);
+    float slide = (1.0f - smooth01(shown / 0.35f)) * 14.0f;
+
+    char title[64];
+    std::snprintf(title, sizeof(title), "%s", TextToUpper(text.title));
+    float content = (float)MeasureText(title, 10) + 24.0f + measureKeyHint("TAB", "more");
+    if (MeasureText(text.code, 20) > content) content = (float)MeasureText(text.code, 20);
+    if (MeasureText(text.line, 10) > content) content = (float)MeasureText(text.line, 10);
+    Rectangle card = {SCREEN_WIDTH - 12.0f - (content + 76.0f), 44.0f - slide, content + 76.0f, 80.0f};
+
+    drawParchment(card, alpha);
+    drawNoteMark(NoteKind::Info, card.x + 30.0f, card.y + 40.0f, style.ink, alpha);
+    float x = card.x + 56.0f;
+    DrawText(title, (int)x, (int)card.y + 13, 10, Fade(style.ink, alpha));
+    drawKeyHint("TAB", "more", card.x + card.width - 20.0f - measureKeyHint("TAB", "more"), card.y + 11.0f, INK, PARCHMENT,
+                INK_SOFT, alpha);
+    DrawText(text.code, (int)x, (int)card.y + 30, 20, Fade(CODE_INK, alpha));
+    DrawText(text.line, (int)x, (int)card.y + 57, 10, Fade(INK, alpha));
 }
 
 // Region 4: a key hint above the traveler while standing on N3 with its NULL link.
@@ -294,7 +358,7 @@ void Game::drawInteractionPrompt() const {
         return;
     }
     const char* key = inspectorOpen ? "E" : "TAB";
-    const char* action = inspectorOpen ? "check & repair N3->next" : "check N3->next in the journal";
+    const char* action = inspectorOpen ? "mend the bridge" : "look at the way ahead";
     float width = measureKeyHint(key, action) + 14.0f;
     float x = player.position.x + player.size.x / 2.0f - camera.target.x - width / 2.0f;
     float y = player.position.y - 34.0f;
@@ -303,11 +367,16 @@ void Game::drawInteractionPrompt() const {
     drawKeyHint(key, action, x + 7.0f, y + 4.0f, UI_TEXT, OUTLINE_DARK, NULL_AMBER);
 }
 
-// Bottom left, small and quiet: the controls during active play.
+// Bottom left, small and quiet: the controls at the start of the journey. They fade out once
+// the traveler has made the first step (the pause screen lists them too).
 void Game::drawControlsStrip() const {
+    float alpha = journeyStarted ? 1.0f - journeyTimer / 1.5f : 1.0f;
+    if (alpha <= 0.0f) {
+        return;
+    }
     struct Hint { const char* key; const char* action; };
     const Hint hints[] = {
-        {"A/D or ARROWS", "move"}, {"SPACE", "jump"}, {"E/ENTER", "interact"}, {"TAB", "journal"}, {"ESC", "pause"},
+        {"A/D or ARROWS", "walk"}, {"SPACE", "jump"}, {"E/ENTER", "interact"}, {"TAB", "journal"}, {"ESC", "pause"},
     };
     float total = 0.0f;
     for (const Hint& hint : hints) total += measureKeyHint(hint.key, hint.action) + 14.0f;
@@ -315,36 +384,63 @@ void Game::drawControlsStrip() const {
 
     float x = 22.0f;
     float y = SCREEN_HEIGHT - 26.0f;
-    DrawRectangleRounded(Rectangle{x - 10.0f, y - 4.0f, total + 20.0f, 22.0f}, 0.5f, 6, Fade(UI_NAVY, 0.6f));
+    DrawRectangleRounded(Rectangle{x - 10.0f, y - 4.0f, total + 20.0f, 22.0f}, 0.5f, 6, Fade(UI_NAVY, 0.6f * alpha));
     for (const Hint& hint : hints) {
-        x += drawKeyHint(hint.key, hint.action, x, y, UI_TEXT, OUTLINE_DARK, UI_DIM_TEXT) + 14.0f;
+        x += drawKeyHint(hint.key, hint.action, x, y, UI_TEXT, OUTLINE_DARK, UI_DIM_TEXT, alpha) + 14.0f;
     }
 }
 
-// The region's name, shown briefly after arriving.
+// Between places: the screen holds dark while the place's name and a line about it appear among
+// drifting motes of its light, then the words rise and fade as the place itself fades in.
 void Game::drawTitleCard() const {
     if (titleCardTimer <= 0.0f) {
         return;
     }
-    float shown = TITLE_CARD_SECONDS - titleCardTimer;
-    float alpha = std::fmin(1.0f, shown / 0.5f) * std::fmin(1.0f, titleCardTimer / 0.7f);
     const RegionInfo& region = world.getRegion(regionIndex);
     const RegionStyle& style = REGION_STYLES[regionIndex];
+    float shown = TITLE_CARD_SECONDS - titleCardTimer;
+    float alpha = std::fmin(1.0f, shown / 0.6f) * std::fmin(1.0f, titleCardTimer / 0.8f);
+    float dark = 1.0f - smooth01((shown - TRANSITION_HOLD_SECONDS) / TRANSITION_IN_SECONDS); // 1 while held dark
 
+    // A faint glow of the place's color behind the words, so the dark has a hint of where you are going.
+    DrawCircleGradient(SCREEN_WIDTH / 2, 330, 520.0f, Fade(style.accent, 0.07f * alpha * dark), Fade(style.accent, 0.0f));
+    for (int i = 0; i < 40; i++) { // motes of the place's light, rising through the dark
+        float speed = 0.05f + 0.07f * hash01(i * 3 + 1);
+        float t = std::fmod(shown * speed + hash01(i * 7 + 2), 1.0f);
+        float x = SCREEN_WIDTH * hash01(i * 11 + 3) + std::sin(shown * 0.8f + i * 1.3f) * 16.0f;
+        float y = SCREEN_HEIGHT * (1.05f - t * 1.1f);
+        float a = alpha * dark * std::sin(t * 3.14159f) * (0.35f + 0.55f * hash01(i * 5));
+        float r = 1.0f + 1.5f * hash01(i * 13);
+        DrawCircleV(Vector2{x, y}, r * 4.0f, Fade(style.accent, a * 0.12f));
+        DrawCircleV(Vector2{x, y}, r, Fade(style.accent, a));
+    }
+
+    float rise = 1.0f - dark;
+    const float center = SCREEN_WIDTH / 2.0f;
+    const int y = (int)(286.0f - 124.0f * rise);
+    const int nameWidth = MeasureText(region.placeName, 40);
+    if (rise > 0.0f) { // a soft band behind the words once the scene shows through
+        float band = 0.45f * alpha * rise;
+        DrawRectangleGradientH((int)center - nameWidth, y - 18, nameWidth, 140, Fade(BLACK, 0.0f), Fade(BLACK, band));
+        DrawRectangleGradientH((int)center, y - 18, nameWidth, 140, Fade(BLACK, band), Fade(BLACK, 0.0f));
+    }
     char number[32];
     std::snprintf(number, sizeof(number), "REGION %d", regionIndex + 1);
-    int y = 150;
-    int nameWidth = MeasureText(region.placeName, 40);
-    DrawRectangleGradientH(SCREEN_WIDTH / 2 - nameWidth, y - 18, nameWidth, 110, Fade(BLACK, 0.0f), Fade(BLACK, 0.45f * alpha));
-    DrawRectangleGradientH(SCREEN_WIDTH / 2, y - 18, nameWidth, 110, Fade(BLACK, 0.45f * alpha), Fade(BLACK, 0.0f));
-    DrawText(number, SCREEN_WIDTH / 2 - MeasureText(number, 20) / 2, y, 20, Fade(GILT, alpha));
-    DrawText(region.placeName, SCREEN_WIDTH / 2 - nameWidth / 2 + 2, y + 28, 40, Fade(BLACK, 0.6f * alpha));
-    DrawText(region.placeName, SCREEN_WIDTH / 2 - nameWidth / 2, y + 26, 40, Fade(PARCHMENT, alpha));
-    DrawText(region.title, SCREEN_WIDTH / 2 - MeasureText(region.title, 20) / 2, y + 74, 20, Fade(style.accent, alpha));
+    DrawText(number, (int)center - MeasureText(number, 20) / 2, y, 20, Fade(GILT, alpha));
+    DrawText(region.placeName, (int)center - nameWidth / 2 + 2, y + 30, 40, Fade(BLACK, 0.6f * alpha));
+    DrawText(region.placeName, (int)center - nameWidth / 2, y + 28, 40, Fade(PARCHMENT, alpha));
+
+    float half = 110.0f * smooth01(shown / 1.0f); // a thin rule drawn out from a diamond
+    DrawRectangle((int)(center - half), y + 84, (int)(half * 2.0f), 1, Fade(style.accent, 0.7f * alpha));
+    DrawPoly(Vector2{center, y + 84.5f}, 4, 4.0f, 0.0f, Fade(style.accent, alpha));
+
+    const char* line = REGION_LINES[regionIndex];
+    float lineAlpha = alpha * smooth01((shown - 0.35f) / 0.6f);
+    DrawText(line, (int)center - MeasureText(line, 20) / 2, y + 98, 20, Fade(style.accent, lineAlpha));
 }
 
 // ---------------------------------------------------------------------------
-// The field journal: the current node's real links, then a walk from the head.
+// The field journal: the current node's real links, the walk from the head, and the lesson.
 // ---------------------------------------------------------------------------
 
 void Game::drawInspector() const {
@@ -353,6 +449,7 @@ void Game::drawInspector() const {
     Node* head = world.getHead(regionIndex);
     const Node* current = player.currentNode;
     bool isDoubly = region.kind == ListKind::Doubly;
+    bool isCircular = region.kind == ListKind::Circular;
     bool emphasizePrevious = regionIndex == 1 && stage == 1 && !gateOpen;
 
     // Build the "walk from head" line by reading the actual links.
@@ -369,7 +466,9 @@ void Game::drawInspector() const {
     char id[16];
     while (node != nullptr && steps < MAX_NODES_PER_REGION) {
         std::snprintf(id, sizeof(id), "N%d", node->id);
-        count = addToken(tokens, count, capacity, id, node == current ? TokenStyle::Current : TokenStyle::Plain);
+        bool visited = node->id >= 0 && node->id <= MAX_NODES_PER_REGION && visitedIds[node->id];
+        TokenStyle look = (node == current) ? TokenStyle::Current : (visited ? TokenStyle::Plain : TokenStyle::Unvisited);
+        count = addToken(tokens, count, capacity, id, look);
         Node* next = node->next;
         steps++;
         if (next == nullptr) {
@@ -382,7 +481,7 @@ void Game::drawInspector() const {
             std::snprintf(id, sizeof(id), "N%d", head->id);
             count = addToken(tokens, count, capacity, "->", TokenStyle::Arrow);
             count = addToken(tokens, count, capacity, id, TokenStyle::LoopEnd);
-            stopNote = "stopped: back at the head (node == head)";
+            stopNote = "stopped: back at the start (node == head)";
             break;
         }
         bool twoWay = isDoubly && next->previous == node;
@@ -390,18 +489,29 @@ void Game::drawInspector() const {
         node = next;
     }
 
+    // A line that connects the list to where the traveler is and what they are doing.
     const char* note = nullptr;
     if (current != nullptr) {
         if (regionIndex == 3 && stage == 1 && current->next == nullptr) {
             note = "next is NULL: there is no node to follow. Press E to append one.";
+        } else if (regionIndex == 3 && stage >= 2 && current->id == 3) {
+            note = "next is N4 (Bridge) now: append() linked it to the tail.";
+        } else if (emphasizePrevious && current->previous != nullptr) {
+            note = "The key's light goes back through previous, to N2 (Old Hall).";
         } else if (isDoubly && current->previous == nullptr) {
             note = "previous is NULL: this is the head.";
         } else if (current->next == nullptr) {
             note = "next is NULL: this is the tail.";
-        } else if (region.kind == ListKind::Circular && current->next == head) {
+        } else if (isCircular && current->next == head) {
             note = "next is the head: this is the tail of the loop.";
         }
     }
+    char stepsLine[96] = "";
+    if (isCircular) {
+        std::snprintf(stepsLine, sizeof(stepsLine), "Steps this walk: %d.  Stop when current == N%d.  Safety limit: %d.",
+                      loopSteps, (loopStartNode != nullptr) ? loopStartNode->id : 1, MAX_LOOP_STEPS);
+    }
+    const char* lesson = REGION_LESSONS[regionIndex];
 
     const float width = 412.0f;
     const float x = SCREEN_WIDTH - width - 10.0f;
@@ -410,7 +520,8 @@ void Game::drawInspector() const {
     const float rightX = x + width - pad;
     int walkLines = layoutTokens(tokens, count, x + pad, 0.0f, rightX, false, style.ink);
     float height = 40.0f + 24.0f + 16.0f + 26.0f + 26.0f + 30.0f + 12.0f + 16.0f + walkLines * 26.0f + 16.0f +
-                   (note != nullptr ? 18.0f : 0.0f) + 12.0f;
+                   (note != nullptr ? 16.0f : 0.0f) + (isCircular ? 16.0f : 0.0f) + 10.0f + 16.0f +
+                   countLines(lesson) * 14.0f + 12.0f;
     float y = 10.0f;
 
     drawParchment(Rectangle{x, y, width, height});
@@ -433,7 +544,7 @@ void Game::drawInspector() const {
         DrawText("YOU ARE ON", (int)(x + pad), (int)y, 10, INK_SOFT);
         y += 16.0f;
         describeNode(text, sizeof(text), current);
-        DrawPoly(Vector2{x + pad + 6.0f, y + 9.0f}, 4, 7.0f, 0.0f, CURRENT_GOLD); // the same diamond as the HUD
+        DrawPoly(Vector2{x + pad + 6.0f, y + 9.0f}, 4, 7.0f, 0.0f, CURRENT_GOLD);
         DrawText(text, (int)(x + pad + 18.0f), (int)y, 20, INK);
         y += 26.0f;
 
@@ -469,13 +580,25 @@ void Game::drawInspector() const {
     y += walkLines * 26.0f;
     DrawText(stopNote, (int)(x + pad), (int)y, 10, INK_SOFT);
     y += 16.0f;
-    if (note != nullptr) {
-        DrawText(note, (int)(x + pad), (int)y, 10, (regionIndex == 3) ? INK_NULL : INK);
+    if (isCircular) {
+        DrawText(stepsLine, (int)(x + pad), (int)y, 10, INK);
+        y += 16.0f;
     }
+    if (note != nullptr) {
+        DrawText(note, (int)(x + pad), (int)y, 10, (regionIndex == 3 && stage == 1) ? INK_NULL : INK);
+        y += 16.0f;
+    }
+
+    y += 4.0f;
+    DrawRectangle((int)(x + pad), (int)y, (int)(width - 2.0f * pad), 1, Fade(INK_SOFT, 0.5f));
+    y += 6.0f;
+    DrawText("WHAT THIS PLACE TEACHES", (int)(x + pad), (int)y, 10, INK_SOFT);
+    y += 16.0f;
+    drawLines(lesson, x + pad, y, 10, 14.0f, INK);
 }
 
 // ---------------------------------------------------------------------------
-// Journal notes, pause, and the final summary
+// Journal notes, pause, and the ending
 // ---------------------------------------------------------------------------
 
 // A note pinned near the bottom of the screen. It closes after its last page.
@@ -485,10 +608,7 @@ void Game::drawMessageBox() const {
     NoteKind kind = (pageIndex < pageKinds.size()) ? pageKinds[pageIndex] : NoteKind::Info;
     const RegionStyle& style = REGION_STYLES[regionIndex];
 
-    int lines = 1;
-    for (char c : text) {
-        if (c == '\n') lines++;
-    }
+    int lines = countLines(text.c_str());
     float width = MeasureText(text.c_str(), 20) + 96.0f;
     if (width < 460.0f) width = 460.0f;
     if (width > SCREEN_WIDTH - 40.0f) width = SCREEN_WIDTH - 40.0f;
@@ -512,30 +632,48 @@ void Game::drawMessageBox() const {
     drawKeyHint("E / ENTER", action, card.x + card.width - hintWidth - 20.0f, footerY, INK, PARCHMENT, INK_SOFT);
 }
 
-// The journal's leather cover, closed while the game is paused.
+// The journal's leather cover, closed while the game is paused, with the controls inside it.
 void Game::drawPauseScreen() const {
     DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, Fade(BLACK, 0.55f));
-    Rectangle cover = {SCREEN_WIDTH / 2.0f - 220.0f, 220.0f, 440.0f, 220.0f};
-    DrawRectangleRounded(Rectangle{cover.x + 5.0f, cover.y + 6.0f, cover.width, cover.height}, 0.08f, 6, Fade(BLACK, 0.4f));
-    DrawRectangleRounded(cover, 0.08f, 6, LEATHER);
-    DrawRectangleRoundedLinesEx(Rectangle{cover.x + 10.0f, cover.y + 10.0f, cover.width - 20.0f, cover.height - 20.0f}, 0.08f,
+    Rectangle cover = {SCREEN_WIDTH / 2.0f - 260.0f, 170.0f, 520.0f, 370.0f};
+    DrawRectangleRounded(Rectangle{cover.x + 5.0f, cover.y + 6.0f, cover.width, cover.height}, 0.06f, 6, Fade(BLACK, 0.4f));
+    DrawRectangleRounded(cover, 0.06f, 6, LEATHER);
+    DrawRectangleRoundedLinesEx(Rectangle{cover.x + 10.0f, cover.y + 10.0f, cover.width - 20.0f, cover.height - 20.0f}, 0.06f,
                                 6, 2.0f, GILT);
     DrawRectangle((int)cover.x + 28, (int)cover.y, 12, (int)cover.height, LEATHER_DARK); // the spine strap
 
+    const float center = SCREEN_WIDTH / 2.0f + 14.0f; // a little right of the strap
     const char* title = "PAUSED";
-    DrawText(title, SCREEN_WIDTH / 2 - MeasureText(title, 40) / 2, (int)cover.y + 44, 40, GILT);
+    DrawText(title, (int)center - MeasureText(title, 40) / 2, (int)cover.y + 36, 40, GILT);
     const char* subtitle = TextFormat("Region %d - %s", regionIndex + 1, world.getRegion(regionIndex).placeName);
-    DrawText(subtitle, SCREEN_WIDTH / 2 - MeasureText(subtitle, 20) / 2, (int)cover.y + 94, 20, PARCHMENT);
+    DrawText(subtitle, (int)center - MeasureText(subtitle, 20) / 2, (int)cover.y + 86, 20, PARCHMENT);
+    DrawRectangle((int)center - 150, (int)cover.y + 122, 300, 1, Fade(GILT, 0.6f));
+
+    struct Row { const char* key; const char* action; };
+    const Row rows[] = {
+        {"A / D  or  LEFT / RIGHT", "walk"},
+        {"SPACE", "jump"},
+        {"E  or  ENTER", "interact, turn a note's page"},
+        {"TAB", "open or close the field journal"},
+        {"ESC", "pause and resume"},
+    };
+    float rowY = cover.y + 140.0f;
+    for (const Row& row : rows) { // key caps right-aligned to the middle, actions to the right of it
+        float capWidth = MeasureText(row.key, 10) + 12.0f;
+        float capX = center - 16.0f - capWidth;
+        DrawRectangleRounded(Rectangle{capX, rowY, capWidth, 16.0f}, 0.3f, 4, PARCHMENT);
+        DrawText(row.key, (int)(capX + 6.0f), (int)rowY + 3, 10, LEATHER_DARK);
+        DrawText(row.action, (int)center, (int)rowY + 3, 10, PARCHMENT);
+        rowY += 28.0f;
+    }
 
     float total = measureKeyHint("ESC", "resume") + 30.0f + measureKeyHint("Q", "quit");
-    float x = SCREEN_WIDTH / 2.0f - total / 2.0f;
-    x += drawKeyHint("ESC", "resume", x, cover.y + 140.0f, PARCHMENT, LEATHER_DARK, PARCHMENT) + 30.0f;
-    drawKeyHint("Q", "quit", x, cover.y + 140.0f, PARCHMENT, LEATHER_DARK, PARCHMENT);
-    const char* tip = "Tab opens the field journal at any time.";
-    DrawText(tip, SCREEN_WIDTH / 2 - MeasureText(tip, 10) / 2, (int)cover.y + 176, 10, Fade(PARCHMENT, 0.7f));
+    float x = center - total / 2.0f;
+    x += drawKeyHint("ESC", "resume", x, cover.y + cover.height - 50.0f, GILT, LEATHER_DARK, GILT) + 30.0f;
+    drawKeyHint("Q", "quit", x, cover.y + cover.height - 50.0f, GILT, LEATHER_DARK, GILT);
 }
 
-// The journal opened to its last spread: what each region taught.
+// The journal opened to its last spread: what each place taught.
 void Game::drawCompleteScreen() const {
     DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, Fade(BLACK, 0.6f));
     Rectangle book = {120.0f, 70.0f, 1040.0f, 580.0f};
@@ -546,10 +684,11 @@ void Game::drawCompleteScreen() const {
     drawParchment(right);
     DrawRectangle((int)(book.x + book.width / 2.0f - 4.0f), (int)book.y, 8, (int)book.height, LEATHER_DARK); // the spine
 
+    const float middle = left.x + left.width / 2.0f;
     const char* title = "The Wanderer's Journal";
-    DrawText(title, (int)(left.x + left.width / 2.0f) - MeasureText(title, 30) / 2, (int)left.y + 40, 30, INK);
-    const char* subtitle = "Tutorial stage complete";
-    DrawText(subtitle, (int)(left.x + left.width / 2.0f) - MeasureText(subtitle, 20) / 2, (int)left.y + 82, 20, INK_SOFT);
+    DrawText(title, (int)middle - MeasureText(title, 30) / 2, (int)left.y + 40, 30, INK);
+    const char* subtitle = "The journey's end";
+    DrawText(subtitle, (int)middle - MeasureText(subtitle, 20) / 2, (int)left.y + 82, 20, INK_SOFT);
 
     // A portrait of the traveler, drawn with the same sprite as in the game, four times larger.
     Player portrait = player;
@@ -557,22 +696,20 @@ void Game::drawCompleteScreen() const {
     portrait.velocity = Vector2{0.0f, 0.0f};
     portrait.landTimer = 0.0f;
     portrait.facing = 1.0f;
-    Vector2 portraitFeet = {left.x + left.width / 2.0f, left.y + 320.0f};
+    Vector2 portraitFeet = {middle, left.y + 320.0f};
     DrawEllipse((int)portraitFeet.x, (int)portraitFeet.y + 6, 70.0f, 10.0f, Fade(PARCHMENT_SHADE, 0.9f));
     drawTraveler(portrait, elapsed, portraitFeet, 4.0f);
 
-    const char* journey = "Four lists, four places, one journey.";
-    DrawText(journey, (int)(left.x + left.width / 2.0f) - MeasureText(journey, 20) / 2, (int)left.y + 352, 20, INK);
-    char nodes[96];
-    std::snprintf(nodes, sizeof(nodes), "Nodes still allocated: %d. Each list frees its own nodes, once, on exit.",
-                  g_liveNodeCount);
-    DrawText(nodes, (int)(left.x + left.width / 2.0f) - MeasureText(nodes, 10) / 2, (int)left.y + 392, 10, INK_SOFT);
+    const char* journey = "Four places, four lists, one journey.";
+    DrawText(journey, (int)middle - MeasureText(journey, 20) / 2, (int)left.y + 352, 20, INK);
+    const char* closing = "Every link followed, and every gap mended.";
+    DrawText(closing, (int)middle - MeasureText(closing, 10) / 2, (int)left.y + 386, 10, INK_SOFT);
 
     struct Entry { const char* line1; const char* line2; };
     const Entry entries[REGION_COUNT] = {
-        {"Follow next in one direction.", "The tail's next is NULL."},
-        {"next and previous go both ways.", "head->previous, tail->next: NULL."},
-        {"tail->next is the head.", "Stop at the start, or after N steps."},
+        {"Follow next, one way only.", "The tail's next is NULL."},
+        {"next and previous go both ways.", "Both ends point to NULL."},
+        {"The tail's next is the head.", "Stop when you are back at the start."},
         {"Check a pointer before you follow it.", "nullptr means there is no node."},
     };
     for (int i = 0; i < REGION_COUNT; i++) {
@@ -587,10 +724,10 @@ void Game::drawCompleteScreen() const {
         DrawText(entries[i].line2, (int)x + 44, (int)y + 70, 20, INK);
     }
 
-    float total = measureKeyHint("R", "replay") + 40.0f + measureKeyHint("Q / ESC", "exit");
-    float x = left.x + left.width / 2.0f - total / 2.0f;
+    float total = measureKeyHint("R", "walk again") + 40.0f + measureKeyHint("Q / ESC", "exit");
+    float x = middle - total / 2.0f;
     float y = left.y + left.height - 60.0f;
-    x += drawKeyHint("R", "replay", x, y, INK, PARCHMENT, INK) + 40.0f;
+    x += drawKeyHint("R", "walk again", x, y, INK, PARCHMENT, INK) + 40.0f;
     drawKeyHint("Q / ESC", "exit", x, y, INK, PARCHMENT, INK);
 }
 
@@ -611,23 +748,33 @@ void Game::showToast(const std::string& text, float seconds) {
     toastTimer = seconds;
 }
 
+void Game::showCallout(Callout which) {
+    int index = (int)which;
+    if (index < 0 || index >= (int)Callout::Count || calloutSeen[index]) {
+        return; // each kind of link is named once per journey
+    }
+    calloutSeen[index] = true;
+    calloutShown = which;
+    calloutTimer = CALLOUT_SECONDS;
+}
+
+// What to do next, in the exploring voice (the journal has the details).
 const char* Game::currentObjective() const {
     switch (regionIndex) {
         case 0:
-            return gateOpen ? "Done! Walk into the arch on N5." : "Follow next from the head N1 to the tail N5.";
+            return gateOpen ? "The arch is open. Walk through it." : "Follow the warm light to the sunlit arch.";
         case 1:
-            if (gateOpen) return "Done! Walk through the doorway on N5.";
-            if (stage == 0) return "Go forward to N4 (Key Shrine) and take the key.";
-            if (stage == 1) return "Carry its light back to N2 (Old Hall) through previous.";
-            return "Continue forward to the tail N5.";
+            if (gateOpen) return "The doorway is open. Walk through it.";
+            if (stage == 0) return "Climb to the Key Shrine and take the key.";
+            if (stage == 1) return "Carry the key's light back down to the Old Hall.";
+            return "Go on to the Far Steps.";
         case 2:
-            return gateOpen ? "Back at the start! Walk into the moon gate on N1."
-                            : "Follow next around the loop back to the start N1.";
+            return gateOpen ? "You are home. Walk into the moon gate." : "Walk the whole circle and return to the gate.";
         case 3:
-            if (gateOpen) return "Stage clear! Walk into the dawn gate.";
-            if (stage == 0) return "Reach N3 (Edge) and check its next link.";
-            if (stage == 1) return "N3->next is NULL. Open the journal (Tab), then press E.";
-            return "Cross the new node N4 (Bridge) to the dawn gate.";
+            if (gateOpen) return "Dawn has come. Walk through the gate.";
+            if (stage == 0) return "Make your way to the cliff's edge.";
+            if (stage == 1) return inspectorOpen ? "Mend the missing link." : "Look before you step: check the way ahead.";
+            return "Cross the bridge to the far cliff.";
         default:
             return "";
     }

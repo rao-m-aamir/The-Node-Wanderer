@@ -31,6 +31,8 @@ add_executable(NodeWanderer
     src/Effects.cpp
     src/World.cpp
     src/ArtCommon.cpp
+    src/Paint.cpp
+    src/Lighting.cpp
     src/ForestArt.cpp
     src/RuinsArt.cpp
     src/GardenArt.cpp

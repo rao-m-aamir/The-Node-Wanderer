@@ -17,13 +17,56 @@ Game::Game() {
     player.size = Vector2{32.0f, 48.0f};
     player.facing = 1.0f;
 
-    // The whole world is drawn into this small canvas and scaled up 2x (pixel art).
-    sceneCanvas = LoadRenderTexture(CANVAS_WIDTH, CANVAS_HEIGHT);
+    // The whole world is drawn into a small canvas and scaled up 2x (pixel art).
+    renderer.load();
 
     world.build();
+    checkRouteJumps();
+    startJourney();
+}
+
+// A new journey (the first start or a replay): the first place is entered behind a dark beat
+// that names it, then the scene fades in.
+void Game::startJourney() {
+    for (bool& seen : calloutSeen) {
+        seen = false;
+    }
+    calloutTimer = 0.0f;
+    journeyStarted = false;
+    journeyTimer = 0.0f;
     enterRegion(0);
-    fadeTimer = RECOVERY_FADE_SECONDS;
+    transitionTarget = 0;
+    transitionTimer = TRANSITION_OUT_SECONDS; // already dark: hold, then fade in
+    transitionSwitched = true;
     titleCardTimer = TITLE_CARD_SECONDS;
+}
+
+// Every jump the route needs must be possible with the real movement code. A failure is reported
+// like a failed link check: in the console, and as an assert in debug builds.
+void Game::checkRouteJumps() const {
+    auto report = [](int region, const Node* from, const Node* to, bool ok) {
+        TraceLog(ok ? LOG_INFO : LOG_WARNING, "Jump check %s: Region %d N%d -> N%d", ok ? "OK" : "FAILED", region + 1,
+                 from->id, to->id);
+        assert(ok && "A jump on the route cannot be made");
+    };
+    for (int region = 0; region < REGION_COUNT; region++) {
+        const bool doubly = world.getRegion(region).kind == ListKind::Doubly;
+        Node* head = world.getHead(region);
+        Node* node = head;
+        int steps = 0;
+        while (node != nullptr && steps < MAX_NODES_PER_REGION) {
+            Node* next = node->next;
+            if (next != nullptr && next != head) { // Region 3's tail -> head is the current, not a jump
+                report(region, node, next, canJumpBetween(*node, *next, physics, player.size));
+            }
+            if (doubly && node->previous != nullptr) { // Region 2 also needs the way back
+                report(region, node, node->previous, canJumpBetween(*node, *node->previous, physics, player.size));
+            }
+            node = next;
+            steps++;
+            if (node == head) break;
+        }
+    }
 }
 
 Game::~Game() {
@@ -33,7 +76,8 @@ Game::~Game() {
     loopStartNode = nullptr;
     passageDestination = nullptr;
 
-    UnloadRenderTexture(sceneCanvas);
+    regionArt.clear();
+    renderer.unload();
 }
 
 bool Game::shouldQuit() const {
@@ -62,19 +106,20 @@ void Game::resetStage() {
     world.build();
 
     inspectorOpen = false;
-    enterRegion(0);
-    fadeTimer = RECOVERY_FADE_SECONDS;
-    titleCardTimer = TITLE_CARD_SECONDS;
+    startJourney();
 }
 
 void Game::enterRegion(int index) {
     regionIndex = index;
+    bakeRegionArt(regionArt, index, world); // paint this place from its list's nodes
     stage = 0;
     stageTimer = 0.0f;
     gateOpen = false;
     gateTimer = 0.0f;
     nodeTimer = 0.0f;
     loopSteps = 0;
+    toastTimer = 0.0f;   // lines and callouts belong to the place where they happened
+    calloutTimer = 0.0f;
     for (bool& visited : visitedIds) {
         visited = false;
     }
@@ -93,43 +138,38 @@ void Game::enterRegion(int index) {
     updateCamera(0.0f);
     updateLedgeMist(0.0f); // start with the right platforms veiled, no fade-in
 
+    // A short welcome in the exploring voice. The journal (Tab) explains the list itself.
     switch (index) {
         case 0:
             showMessage({
-                "Welcome, wanderer. Every ledge in this forest is a real Node,\n"
-                "created with new and owned by a singly linked list.",
-                "Each node stores one pointer: next. Only the ledge it points to is solid,\n"
-                "the rest fade into mist. Follow next from the head N1 to the tail N5.",
+                "Welcome, wanderer. This old forest path has crumbled,\n"
+                "and only the ledge ahead of you will hold your weight.",
+                "Follow the warm light from ledge to ledge, up through\n"
+                "the trees and down to the sunlit arch.",
             }, NoteKind::Intro);
             break;
         case 1:
             showMessage({
-                "The Forgotten Return. These ruins form a doubly linked list:\n"
-                "each node stores next and previous.",
-                "Warm light rises where next points. Cool light falls where previous points.\n"
-                "head->previous and tail->next are both NULL.",
-                "Goal: take the key from N4 (Key Shrine), carry its light back to\n"
-                "N2 (Old Hall) through previous, then go on to the tail N5.",
+                "The Forgotten Return. These drowned halls remember both ways:\n"
+                "from any stone you can reach the next one, or go back.",
+                "Climb to the Key Shrine and take the key.\n"
+                "Its light belongs to the brazier in the Old Hall below.",
             }, NoteKind::Intro);
             break;
         case 2:
             showMessage({
-                "The Endless Garden. This list is circular:\n"
-                "the tail's next points back to the head, so no next is NULL.",
-                "The hollow in the tail's root is the link tail->next.\n"
-                "Walk into it, and the great root carries you back to the head.",
-                "A loop over a circular list needs a stop condition, or it never ends.\n"
-                "Goal: follow next all the way around until current == start (N1).",
+                "The Endless Garden. Here the last terrace flows back to the first,\n"
+                "so the path never ends by itself.",
+                "Walk the whole circle once, and stop when you are back at the gate.\n"
+                "The hollow under the great tree will carry you home.",
             }, NoteKind::Intro);
             break;
         case 3:
             showMessage({
-                "The Edge of Nothing. nullptr means \"no node\".\n"
-                "Following it is a bug: in C++ it is undefined behavior.",
-                "Always check before you follow:\n"
-                "    if (current->next != nullptr) { current = current->next; }",
-                "Goal: reach N3 (Edge), inspect its next link, and repair it safely.\n"
-                "Stay out of the amber gap.",
+                "The Edge of Nothing. The old bridge has fallen,\n"
+                "and past the last cliff there is nothing to stand on.",
+                "Reach the edge, look before you step,\n"
+                "and find a way across to the far side.",
             }, NoteKind::Intro);
             break;
         default:
@@ -170,6 +210,8 @@ void Game::update(const InputFrame& input, float dt) {
 
     elapsed += dt;
     if (toastTimer > 0.0f) toastTimer -= dt;
+    if (calloutTimer > 0.0f) calloutTimer -= dt;
+    if (journeyStarted) journeyTimer += dt;
     if (fadeTimer > 0.0f) fadeTimer -= dt;
     if (titleCardTimer > 0.0f) titleCardTimer -= dt;
     if (checkpointPulse.timer > 0.0f) checkpointPulse.timer -= dt;
@@ -179,26 +221,27 @@ void Game::update(const InputFrame& input, float dt) {
     nodeTimer += dt;
     updateParticles(particles, dt);
     updateLedgeMist(dt);
+    updateTravelerMotion(player, dt, windAt(playerFeet().x / CANVAS_SCALE, elapsed, regionWind()));
 
-    // Moving between regions: input waits until the new region has been entered.
+    // Moving between places: fade out, a dark beat that names the place ahead, then fade in.
+    // Input waits until the new place starts to appear.
     if (transitionTarget >= 0) {
         transitionTimer += dt;
         if (!transitionSwitched && transitionTimer >= TRANSITION_OUT_SECONDS) {
             transitionSwitched = true;
             clearParticles(particles);
             if (transitionTarget < REGION_COUNT) {
-                enterRegion(transitionTarget);
+                enterRegion(transitionTarget); // each place is its own list: start at its head
                 titleCardTimer = TITLE_CARD_SECONDS;
-                showToast(TextFormat("Region %d is a separate list.  current = nextList.getHead();", regionIndex + 1), 4.0f);
             } else {
                 state = GameState::Complete;
             }
             return; // a key pressed on this frame belonged to the old screen, not the new note or summary
         }
-        if (transitionTimer >= TRANSITION_OUT_SECONDS + TRANSITION_IN_SECONDS) {
+        if (transitionTimer >= TRANSITION_OUT_SECONDS + TRANSITION_HOLD_SECONDS + TRANSITION_IN_SECONDS) {
             transitionTarget = -1;
         }
-        if (!transitionSwitched) return;
+        if (!transitionSwitched || transitionTimer < TRANSITION_OUT_SECONDS + TRANSITION_HOLD_SECONDS) return;
     }
 
     if (state != GameState::Complete && input.toggleInspector) {
@@ -248,7 +291,7 @@ void Game::updatePlaying(const InputFrame& input, float dt) {
         if (passageTimer >= PASSAGE_SECONDS) finishRootPassage();
         return;
     }
-    if (transitionTarget >= 0) {
+    if (transitionTarget >= 0 && !transitionSwitched) {
         return; // walking through an exit: wait for the fade
     }
 
@@ -256,8 +299,18 @@ void Game::updatePlaying(const InputFrame& input, float dt) {
     bool wasGrounded = player.grounded;
     bool jumping = player.grounded && input.jump;
 
+    int stepBefore = (int)(player.walkPhase / 3.14159f);
     updatePlayerMovement(player, physics, input.move, input.jump, dt);
     if (jumping) spawnDust(particles, playerFeet(), 4, dustColor());
+    if (player.grounded && (int)(player.walkPhase / 3.14159f) != stepBefore) {
+        spawnDust(particles, playerFeet(), 2, dustColor()); // a little dust at each footstep
+    }
+    const RegionInfo& place = world.getRegion(regionIndex);
+    float bottom = player.position.y + player.size.y;
+    if (place.waterline > 0.0f && previousBottom < place.waterline && bottom >= place.waterline) { // into the water
+        Vector2 splash = {player.position.x + player.size.x / 2.0f, place.waterline};
+        spawnBurst(particles, splash, 16, Color{190, 214, 240, 255}, Color{120, 150, 200, 255}, 150.0f, 520.0f, 0.7f);
+    }
 
     // Keep the player inside the world horizontally.
     if (player.position.x < 0.0f) player.position.x = 0.0f;
@@ -363,14 +416,11 @@ void Game::followLink(Node* destination) {
         return; // never follow NULL, never move from "no node"
     }
 
-    const char* code = nullptr;
-    bool viaPrevious = false;
-    if (from->next == destination) {
-        code = "current = current->next;";
-    } else if (world.getRegion(regionIndex).kind == ListKind::Doubly && from->previous == destination) {
-        code = "current = current->previous;";
-        viaPrevious = true;
-    } else {
+    // The destination must be one of the current node's real links.
+    bool viaNext = from->next == destination; // current = current->next;
+    bool viaPrevious = !viaNext && world.getRegion(regionIndex).kind == ListKind::Doubly &&
+                       from->previous == destination; // current = current->previous;
+    if (!viaNext && !viaPrevious) {
         return; // not reachable through a permitted link: do not move
     }
 
@@ -378,11 +428,18 @@ void Game::followLink(Node* destination) {
     nodeTimer = 0.0f;
     markVisited(destination);
     spawnArrivalEffects(viaPrevious);
+    if (!journeyStarted) {
+        journeyStarted = true; // the first step: the controls have done their job and fade out
+        journeyTimer = 0.0f;
+    }
 
-    if (regionIndex == 2 && destination == loopStartNode) {
-        showToast(TextFormat("%s   N%d -> N%d  (tail->next is the head)", code, from->id, destination->id));
+    // Ordinary steps show no code. The first time each kind of link is used, the journal names it.
+    if (viaPrevious) {
+        showCallout(Callout::FollowPrevious);
+    } else if (regionIndex == 2 && destination == loopStartNode) {
+        showCallout(Callout::LoopBack); // tail->next is the head
     } else {
-        showToast(TextFormat("%s   N%d -> N%d", code, from->id, destination->id));
+        showCallout(Callout::FollowNext);
     }
 
     if (regionIndex == 2 && !gateOpen) {
@@ -422,9 +479,10 @@ void Game::checkObjectives() {
         case 0:
             if (current->next == nullptr) { // reached the tail
                 completeRegionObjective(
-                    "Checkpoint question: Which link tells you where to go next?",
-                    "Answer: next. Each node stores the address of the following node.\n"
-                    "The tail's next is NULL, so the list ends at N5. The exit is open.");
+                    "Journal question: which link tells you where to go next?",
+                    "Answer: next. Each node stores the address of the node after it,\n"
+                    "and nothing points back. The tail's next is NULL, so the list ends here.\n"
+                    "The arch is open.");
             }
             break;
 
@@ -435,39 +493,40 @@ void Game::checkObjectives() {
                 spawnBurst(particles, Vector2{current->platformPosition.x + current->platformWidth / 2.0f,
                                               current->platformPosition.y - 44.0f},
                            16, Color{214, 176, 96, 255}, COOL_LIGHT, 90.0f, 30.0f, 0.9f);
-                showToast("You took the key's light. Carry it back to N2 through previous.", 4.0f);
+                showToast("You took the key. Its light stirs in your hands.", 5.0f);
             } else if (stage == 1 && current->id == 2) {
                 setStage(2); // the light kindles the Old Hall's brazier
                 setCheckpoint(current);
                 spawnBurst(particles, Vector2{current->platformPosition.x + current->platformWidth - 20.0f,
                                               current->platformPosition.y - 18.0f},
                            18, Color{255, 168, 76, 255}, Color{255, 232, 150, 255}, 80.0f, -20.0f, 1.0f);
-                showToast("The brazier is lit. Now continue forward through next to the tail.", 4.0f);
+                showToast("The brazier blazes up, and the old hall wakes.", 5.0f);
             } else if (stage == 2 && current->next == nullptr) {
                 completeRegionObjective(
-                    "Checkpoint question: What does a doubly linked list store that a\n"
-                    "singly linked list does not?",
-                    "Answer: a previous link. That is how you carried the light back to N2.\n"
-                    "head->previous and tail->next are both NULL. The exit is open.");
+                    "Journal question: what does a doubly linked list store\n"
+                    "that a singly linked list does not?",
+                    "Answer: previous, a link to the node before. That is how you carried\n"
+                    "the light back to the Old Hall. At the two ends, head->previous and\n"
+                    "tail->next are NULL. The doorway is open.");
             }
             break;
 
         case 2:
-            // Stop condition: we are back at the node we started from.
+            // The stop condition: we are back at the node we started from.
             if (current == loopStartNode && loopSteps > 0) {
                 completeRegionObjective(
-                    "Checkpoint question: In a circular list no next is NULL.\n"
-                    "So when does a traversal stop?",
-                    TextFormat("Answer: when current == start, or after a maximum number of steps.\n"
-                               "Without a stop condition, the loop never ends. You stopped after %d steps.\n"
-                               "The moon gate on N1 is open.", loopSteps));
+                    "Journal question: in a circular list no next is NULL.\n"
+                    "So when does a walk around it stop?",
+                    TextFormat("Answer: when it is back where it started, current == start.\n"
+                               "You stopped after %d steps. A step limit is only a safety net\n"
+                               "in case the start is never reached. The moon gate is open.", loopSteps));
             } else if (loopSteps >= MAX_LOOP_STEPS) {
-                // Safety stop: a bounded step count also ends the traversal.
+                // Safety fallback: only if the start was never reached.
                 loopSteps = 0;
                 checkpointNode = loopStartNode;
                 restoreToCheckpoint();
-                showMessage({TextFormat("Safety limit: %d steps without reaching the start.\n"
-                                        "The traversal was stopped and restarted at N1.", MAX_LOOP_STEPS)},
+                showMessage({TextFormat("The walk went on for %d steps without coming home,\n"
+                                        "so the safety limit stopped it. Begin again at the gate.", MAX_LOOP_STEPS)},
                             NoteKind::Recovery);
             }
             break;
@@ -476,10 +535,10 @@ void Game::checkObjectives() {
             if (stage == 0 && current->id == 3) {
                 setStage(1);
                 setCheckpoint(current);
-                showToast("You are on N3 (Edge). Open the journal (Tab) and read N3->next.", 4.0f);
+                showToast("The bridge is gone. Only wind lies past the edge.", 5.0f);
             } else if (stage == 2 && current->id == 4) {
                 completeRegionObjective(
-                    "Checkpoint question: What must you do before following a pointer?",
+                    "Journal question: what must you do before following a pointer?",
                     "Answer: check it.   if (current->next != nullptr) { current = current->next; }\n"
                     "nullptr means there is no node: nothing to read, nothing to stand on.\n"
                     "The dawn gate is open.");
@@ -498,11 +557,11 @@ void Game::tryBuildBridge() {
     }
     Node* current = player.currentNode;
     if (current == nullptr || current->id != 3 || !player.grounded) {
-        showToast("Stand on N3 (Edge) to repair its link."); // not while jumping or falling past the edge
+        showToast("Stand at the cliff's edge to mend the bridge."); // not while jumping or falling past the edge
         return;
     }
     if (!inspectorOpen) {
-        showToast("Check first: open the journal (Tab) and read N3->next.");
+        showToast("Look before you build: open your journal (Tab).");
         return;
     }
 
@@ -515,17 +574,12 @@ void Game::tryBuildBridge() {
             spawnBurst(particles, Vector2{bridge->platformPosition.x + 20.0f, bridge->platformPosition.y}, 16,
                        WARM_LIGHT, WHITE, 80.0f, 60.0f, 1.0f);
         }
-        showMessage({
-            "Check: N3->next == nullptr, so there was nothing to follow.",
-            "You called append(). It created a new Node with new and set N3->next to it.\n"
-            "The link is valid now, so the bridge N4 is solid. Cross it to the dawn gate.",
-        }, NoteKind::Info);
+        showCallout(Callout::Append); // no note: the bridge assembling is the answer
+        toastTimer = 0.0f;            // "the bridge is gone" no longer holds
     }
 }
 
 void Game::recoverFromFall(bool movedBackward) {
-    int fromId = (player.currentNode != nullptr) ? player.currentNode->id : 0;
-
     // Region 3: a fall during the first trip around restarts the traversal from the head.
     // Once the stop condition has fired, the loop is done and a fall is an ordinary one.
     bool restartLoop = regionIndex == 2 && !gateOpen;
@@ -537,41 +591,36 @@ void Game::recoverFromFall(bool movedBackward) {
         }
     }
     restoreToCheckpoint();
-    int checkpointId = (player.currentNode != nullptr) ? player.currentNode->id : 0;
+    const char* place = (player.currentNode != nullptr) ? player.currentNode->label : "path";
     markVisited(player.currentNode);
 
     std::vector<std::string> recoveryPages;
     if (regionIndex == 0 && movedBackward) {
-        recoveryPages.push_back(TextFormat(
-            "No previous link! N%d only stores next.\n"
-            "A singly linked list cannot step backward, so the ledge behind you was not solid.", fromId));
+        recoveryPages.push_back("There is no way back here: each ledge only knows the one after it.");
     } else if (regionIndex == 2 && movedBackward) {
-        recoveryPages.push_back(
-            "A circular singly linked list also stores only next.\n"
-            "To reach an earlier node, keep going forward around the loop.");
+        recoveryPages.push_back("The garden flows one way. To reach an earlier terrace,\n"
+                                "keep going around the circle.");
     } else {
-        recoveryPages.push_back(
-            "You fell between nodes.\n"
-            "Only your current node and the nodes its links point to are solid.");
+        recoveryPages.push_back("You slipped into the mist. Only the ledges lit for you will hold.");
     }
 
     if (restartLoop) {
-        recoveryPages.push_back(TextFormat("Recovery: back at the start N%d. Loop steps reset to 0.", checkpointId));
+        recoveryPages.push_back("Your lantern brought you back to the gate. The walk begins again.");
     } else {
-        recoveryPages.push_back(TextFormat("Recovery: you are back at the lantern on N%d.", checkpointId));
+        recoveryPages.push_back(TextFormat("Your lantern brought you back to the %s.", place));
     }
     showMessage(recoveryPages, NoteKind::Recovery);
 }
 
 void Game::recoverFromNullHazard() {
     restoreToCheckpoint();
+    const char* place = (player.currentNode != nullptr) ? player.currentNode->label : "path";
+    showCallout(Callout::NullLink); // the journal's side of it: N3->next is NULL
     showMessage({
-        "NULL hazard! You stepped past N3, but N3->next == nullptr.\n"
-        "There is no node there: nothing to stand on, nothing to read.",
-        "In C++, dereferencing nullptr is undefined behavior (usually a crash).\n"
-        "The game checks first:   if (current->next == nullptr) { /* do not follow */ }",
-        "Recovery: you are back on N3.\n"
-        "Open the journal (Tab), then press E to repair the missing link.",
+        "Nothing holds past the edge. The bridge is gone,\n"
+        "and there is no ledge there to land on.",
+        TextFormat("Your lantern brought you back to the %s.\n"
+                   "Look before you step: open your journal (Tab), then mend the way (E).", place),
     }, NoteKind::Recovery);
 }
 
@@ -618,6 +667,12 @@ void Game::markVisited(const Node* node) {
     }
 }
 
+// How hard the wind blows in this region (for the traveler's scarf; the art has its own).
+float Game::regionWind() const {
+    if (regionIndex == 3) return world.isBridgeBuilt() ? 0.7f : 1.6f;
+    return (regionIndex == 2) ? 0.5f : 0.8f;
+}
+
 // Visual only: platforms that are not solid right now (Traversal Rule A) fade into mist.
 // The target is read from the real links of the active list; dt <= 0 snaps instantly.
 void Game::updateLedgeMist(float dt) {
@@ -639,7 +694,18 @@ void Game::updateLedgeMist(float dt) {
 }
 
 void Game::updateCamera(float dt) {
-    float desired = player.position.x + player.size.x / 2.0f - SCREEN_WIDTH / 2.0f;
+    // Center on the traveler, leaning toward where the guiding light leads, so the way on comes into view.
+    float center = player.position.x + player.size.x / 2.0f;
+    float lean = 0.0f;
+    const Node* toward = guideNode();
+    Rectangle gate;
+    if (toward != nullptr) {
+        lean = (toward->platformPosition.x + toward->platformWidth / 2.0f - center) * 0.35f;
+    } else if (gateOpen && world.getGateRect(regionIndex, gate)) {
+        lean = (gate.x + gate.width / 2.0f - center) * 0.35f;
+    }
+    lean = std::fmax(-220.0f, std::fmin(220.0f, lean));
+    float desired = center + lean - SCREEN_WIDTH / 2.0f;
 
     // The camera stays inside the active region: each region is its own list and its own scene.
     const RegionInfo& region = world.getRegion(regionIndex);
@@ -660,8 +726,7 @@ void Game::updateCamera(float dt) {
     if (dt <= 0.0f) {
         camera.target.x = desired; // snap (region change, recovery)
     } else {
-        float follow = dt * 8.0f;
-        if (follow > 1.0f) follow = 1.0f;
+        float follow = 1.0f - std::exp(-dt * 4.0f); // eases in the same way at any frame rate
         camera.target.x += (desired - camera.target.x) * follow;
     }
     camera.target.y = 0.0f;

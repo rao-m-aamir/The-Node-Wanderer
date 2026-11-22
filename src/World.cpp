@@ -30,40 +30,44 @@ bool isPlatformSolid(const Node* current, const Node* candidate, ListKind kind) 
 // ---------------------------------------------------------------------------
 
 // Layout of Region 4's bridge node. append() creates it when the player fixes the link.
-// It starts right at the edge of N3, so the repaired route continues without a gap.
-static const Vector2 BRIDGE_POSITION = {6040.0f, 450.0f};
-static const float BRIDGE_WIDTH = 320.0f;
+// It starts right at the edge of N3 and reaches the far cliff, where the dawn gate stands.
+static const Vector2 BRIDGE_POSITION = {6000.0f, 470.0f};
+static const float BRIDGE_WIDTH = 420.0f;
 
 void World::build() {
     assert(forwardList.getHead() == nullptr && "build() needs empty lists");
 
+    // The positions describe each place's route: it rises, dips, and turns with the scenery.
+    // List order alone decides which platform is reachable; the jumps are checked in Game.
+
     // Region 1: singly linked list. Each append() sets old tail->next = new node.
-    // Labels name what each platform looks like in its region.
-    forwardList.append(1, "Grove Edge", Vector2{90.0f, 470.0f}, 260.0f);
-    forwardList.append(2, "Mossy Rock", Vector2{460.0f, 430.0f}, 230.0f);
-    forwardList.append(3, "Fallen Log", Vector2{800.0f, 410.0f}, 230.0f);
-    forwardList.append(4, "Old Ruin",   Vector2{1140.0f, 440.0f}, 230.0f);
-    Node* forwardTail = forwardList.append(5, "Arch Cliff", Vector2{1480.0f, 470.0f}, 260.0f);
+    // The path climbs from the forest floor onto a log high between the trunks, then steps down.
+    forwardList.append(1, "Grove Edge", Vector2{70.0f, 560.0f}, 300.0f);
+    forwardList.append(2, "Mossy Rock", Vector2{470.0f, 470.0f}, 170.0f);
+    forwardList.append(3, "Fallen Log", Vector2{760.0f, 380.0f}, 240.0f);
+    forwardList.append(4, "Old Ruin",   Vector2{1100.0f, 420.0f}, 190.0f);
+    Node* forwardTail = forwardList.append(5, "Arch Cliff", Vector2{1400.0f, 500.0f}, 320.0f);
 
     // Region 2: doubly linked list. append() sets both tail->next and new->previous.
-    twoWayList.append(1, "Gatehouse",  Vector2{1890.0f, 480.0f}, 260.0f);
-    twoWayList.append(2, "Old Hall",   Vector2{2260.0f, 450.0f}, 230.0f);
-    twoWayList.append(3, "Colonnade",  Vector2{2600.0f, 420.0f}, 230.0f);
-    twoWayList.append(4, "Key Shrine", Vector2{2940.0f, 450.0f}, 230.0f);
-    twoWayList.append(5, "Far Steps",  Vector2{3280.0f, 480.0f}, 260.0f);
+    // The path dips to a hall by the water, then climbs a ruined tower to the shrine.
+    twoWayList.append(1, "Gatehouse",  Vector2{1880.0f, 470.0f}, 250.0f);
+    twoWayList.append(2, "Old Hall",   Vector2{2230.0f, 550.0f}, 230.0f);
+    twoWayList.append(3, "Colonnade",  Vector2{2560.0f, 460.0f}, 200.0f);
+    twoWayList.append(4, "Key Shrine", Vector2{2860.0f, 390.0f}, 220.0f);
+    twoWayList.append(5, "Far Steps",  Vector2{3180.0f, 480.0f}, 300.0f);
 
     // Region 3: circular list. append() keeps tail->next == head after every call.
-    // The region fits on one screen, so the way back to the head stays visible.
-    Node* loopHead = loopList.append(1, "Garden Gate", Vector2{3700.0f, 480.0f}, 200.0f);
-    loopList.append(2, "Moon Cap",    Vector2{4000.0f, 420.0f}, 180.0f);
-    loopList.append(3, "Flower Bed",  Vector2{4280.0f, 420.0f}, 180.0f);
-    loopList.append(4, "Root Hollow", Vector2{4560.0f, 480.0f}, 220.0f);
+    // The path climbs over the front of the ancient tree; the way back runs under its roots.
+    Node* loopHead = loopList.append(1, "Garden Gate", Vector2{3680.0f, 560.0f}, 220.0f);
+    loopList.append(2, "Moon Cap",    Vector2{3990.0f, 470.0f}, 170.0f);
+    loopList.append(3, "Flower Bed",  Vector2{4250.0f, 380.0f}, 210.0f);
+    loopList.append(4, "Root Hollow", Vector2{4560.0f, 470.0f}, 230.0f);
 
     // Region 4: singly linked list whose tail (N3 "Edge") has next == nullptr.
     // The gap after it is the NULL hazard. The player fixes it later with append().
-    nullList.append(1, "Lookout",   Vector2{5090.0f, 480.0f}, 260.0f);
-    nullList.append(2, "Rope Post", Vector2{5460.0f, 450.0f}, 230.0f);
-    Node* edge = nullList.append(3, "Edge", Vector2{5800.0f, 450.0f}, 240.0f);
+    nullList.append(1, "Lookout",   Vector2{5080.0f, 500.0f}, 260.0f);
+    nullList.append(2, "Rope Post", Vector2{5440.0f, 420.0f}, 200.0f);
+    Node* edge = nullList.append(3, "Edge", Vector2{5740.0f, 470.0f}, 260.0f);
     bridgeBuilt = false;
     // The gap is measured now, from the tail whose next is NULL. It keeps its place after the
     // repair, so the art can fade it out while the bridge assembles over it.
@@ -72,13 +76,13 @@ void World::build() {
                         BRIDGE_POSITION.x + BRIDGE_WIDTH - gapStart - 10.0f, WORLD_KILL_Y - edge->platformPosition.y};
 
     regions[0] = RegionInfo{"The First Connection", "Singly Linked List", ListKind::Singly, 0.0f, 1800.0f,
-                            forwardTail, false};
+                            forwardTail, false, 0.0f};
     regions[1] = RegionInfo{"The Forgotten Return", "Doubly Linked List", ListKind::Doubly, 1800.0f, 3600.0f,
-                            twoWayList.getTail(), false};
+                            twoWayList.getTail(), false, 624.0f}; // the water's surface (canvas row 312 in RuinsArt.cpp)
     regions[2] = RegionInfo{"The Endless Garden", "Circular Singly Linked List", ListKind::Circular, 3600.0f,
-                            5000.0f, loopHead, true};
+                            5000.0f, loopHead, true, 0.0f};
     regions[3] = RegionInfo{"The Edge of Nothing", "NULL Pointer Safety", ListKind::Singly, 5000.0f, WORLD_WIDTH,
-                            nullptr, false}; // the exit gate appears with the bridge
+                            nullptr, false, 0.0f}; // the exit gate appears with the bridge
 
     verifyLinks();
 }
@@ -192,6 +196,10 @@ Rectangle World::getPortalRect() const {
 // and ends where the bridge node will be placed.
 Rectangle World::getNullHazardZone() const {
     return nullGap; // collision with it is only checked while the bridge is not built (Game.cpp)
+}
+
+Rectangle World::getBridgeRect() const {
+    return Rectangle{BRIDGE_POSITION.x, BRIDGE_POSITION.y, BRIDGE_WIDTH, PLATFORM_HEIGHT};
 }
 
 bool World::isBridgeBuilt() const {

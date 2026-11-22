@@ -1,240 +1,104 @@
 #include "ArtCommon.h"
 
-// Region 3, "The Endless Garden": a moonlit garden around an ancient tree and a
-// glowing spring. A great root arches from the tail's hollow back to the head:
-// it is drawn between the real tail node and the node its next points to.
+#include <algorithm>
+
+// Region 3, "The Endless Garden": a luminous night garden around an ancient tree and a glowing
+// spring. The path climbs over the front of the tree; a current of light flows back under its
+// roots from the tail's hollow to the head, so the whole circle can be seen at once.
 
 namespace {
 
-const Color SKY_TOP = {16, 10, 36, 255};
-const Color SKY_MID = {40, 28, 78, 255};
-const Color SKY_LOW = {92, 70, 132, 255};
-const Color MOON = {236, 228, 255, 255};
-const Color FAR_HILLS = {56, 42, 96, 255};
-const Color MID_GARDEN = {36, 26, 68, 255};
-const Color MIST = {170, 150, 220, 255};
-const Color VEIL = {110, 96, 150, 255};
-const Color DEPTH = {20, 14, 40, 255};
+const Color SKY_TOP = {14, 9, 34, 255};
+const Color SKY_MID = {38, 26, 76, 255};
+const Color SKY_LOW = {94, 70, 134, 255};
+const Color MOON = {238, 230, 255, 255};
+const Color MIST = {168, 148, 218, 255};
+const Color VEIL = {108, 94, 150, 255};
 const Color DARK = {8, 6, 18, 255};
-
-const Color STONE_LIGHT = {200, 194, 218, 255};
-const Color STONE = {132, 124, 160, 255};
-const Color STONE_DARK = {84, 76, 114, 255};
-const Color STONE_SHADE = {56, 48, 84, 255};
-const Color MOSS_LIGHT = {150, 230, 190, 255};
-const Color MOSS = {80, 170, 140, 255};
-const Color MOSS_DARK = {40, 100, 96, 255};
-const Color CAP_TOP = {176, 240, 232, 255};
-const Color CAP = {92, 172, 196, 255};
-const Color CAP_DARK = {50, 98, 140, 255};
-const Color STALK = {204, 198, 224, 255};
-const Color BARK_LIGHT = {156, 124, 136, 255};
-const Color BARK = {102, 78, 98, 255};
-const Color BARK_DARK = {62, 44, 68, 255};
 const Color SPRING = {120, 255, 230, 255};
 const Color BLOSSOM = {255, 150, 210, 255};
 const Color PETAL = {255, 214, 236, 255};
 const Color WISTERIA = {176, 130, 240, 255};
 
-const LedgeMaterial GARDEN_STONE = {STONE_LIGHT, STONE, STONE_DARK, 4, STONE, STONE_SHADE, STONE_LIGHT, DEPTH};
-const LedgeMaterial ROOT_BARK = {MOSS_LIGHT, MOSS, MOSS_DARK, 3, BARK, BARK_DARK, BARK_LIGHT, DEPTH};
+const Color HILLS[4] = {{50, 38, 90, 255}, {60, 46, 102, 255}, {74, 58, 116, 255}, {96, 78, 136, 255}};
+const Color HEDGE[4] = {{26, 18, 50, 255}, {36, 26, 66, 255}, {50, 38, 84, 255}, {70, 56, 106, 255}};
+const Color TREE_BARK[6] = {{20, 12, 30, 255}, {36, 24, 50, 255}, {56, 38, 72, 255},
+                            {82, 60, 96, 255}, {118, 92, 128, 255}, {158, 130, 162, 255}};
+const Color TREE_LEAF[5] = {{18, 10, 38, 255}, {30, 20, 60, 255}, {48, 32, 88, 255}, {74, 52, 124, 255}, {108, 80, 158, 255}};
+const Color STONE[6] = {{40, 34, 62, 255}, {62, 54, 90, 255}, {94, 86, 124, 255},
+                        {134, 126, 162, 255}, {172, 166, 198, 255}, {210, 204, 228, 255}};
+const Color MOSS[5] = {{22, 56, 60, 255}, {36, 94, 92, 255}, {70, 156, 132, 255}, {126, 214, 176, 255}, {176, 244, 210, 255}};
+const Color CAP[5] = {{28, 52, 92, 255}, {46, 88, 132, 255}, {82, 156, 188, 255}, {140, 218, 226, 255}, {196, 248, 240, 255}};
+const Color STALK[4] = {{96, 88, 128, 255}, {146, 138, 178, 255}, {196, 190, 218, 255}, {228, 224, 240, 255}};
+const Color FERN[3] = {{8, 6, 18, 255}, {14, 10, 28, 255}, {24, 18, 44, 255}};
 
-const int SPRING_Y = 300; // canvas y of the spring's surface
+const Vector2 TO_MOON = {-0.6f, -0.8f};
+const float TREE_X = 378.0f; // the ancient tree's trunk, behind the flower bed
+const float MOON_X = 92.0f; // in open sky, below the canopy
+const float MOON_Y = 108.0f;
+const int SPRING_Y = 330;    // the spring's surface, under the tree's root arch
 
-// ---------------------------------------------------------------------------
-// Platform shapes, one per node ID.
-// ---------------------------------------------------------------------------
+enum Layer { SKY_LAYER, HILLS_LAYER, GARDEN_LAYER, TREE_LAYER, LAYER_COUNT };
 
-enum class GardenShape { Terrace, MoonCap, Planter, RootKnot };
-
-GardenShape shapeFor(const Node& node) {
-    switch (node.id) {
-        case 2: return GardenShape::MoonCap;
-        case 3: return GardenShape::Planter;
-        case 4: return GardenShape::RootKnot;
-        default: return GardenShape::Terrace;
-    }
+Shading stoneShading(int seed, int darkenFrom) {
+    Shading s;
+    s.ramp = STONE;
+    s.steps = 6;
+    s.toLight = TO_MOON;
+    s.base = 0.48f;
+    s.rim = 0.3f;
+    s.bevel = 2.5f;
+    s.grain = 0.1f;
+    s.grainScale = 0.3f;
+    s.seed = seed;
+    s.darkenFrom = (float)darkenFrom;
+    s.darkenRange = 70.0f;
+    s.darkenAmount = 0.35f;
+    return s;
 }
 
-Silhouette buildGardenSilhouette(GardenShape shape, const Ledge& l) {
-    Silhouette s;
-    s.top = l.top;
-    const int x0 = l.left;
-    const int x1 = l.left + l.width;
-    const int w = l.width;
-    const int cx = x0 + w / 2;
-    const float seed = (float)l.seed;
-    for (int dy = 0; l.top + dy < CANVAS_HEIGHT; dy++) {
-        switch (shape) {
-            case GardenShape::Terrace: { // a stone retaining wall that steps out at its foot
-                int inset = (dy < 4) ? 0 : (dy < 34 ? 1 : 1 - (dy - 34) / 8);
-                if (inset < -5) inset = -5;
-                s.add(dy, x0 + inset, x1 - inset);
-                break;
-            }
-            case GardenShape::MoonCap: { // a flat-topped glowing mushroom cap on a pale stalk
-                if (dy < 2) s.add(dy, x0, x1);
-                else if (dy < 7) s.add(dy, x0 - 2, x1 + 2); // the rim of the cap
-                else if (dy < 11) s.add(dy, x0 + (dy - 6) * 3, x1 - (dy - 6) * 3); // gills underneath
-                else {
-                    int half = w * 11 / 100 + (dy > 60 ? (dy - 60) / 12 : 0);
-                    int wobble = (int)std::round(std::sin(dy * 0.08f + seed) * 2.0f);
-                    s.add(dy, cx - half + wobble, cx + half + wobble);
-                }
-                break;
-            }
-            case GardenShape::Planter: { // a stone urn on a slim pedestal
-                if (dy < 3) s.add(dy, x0, x1);
-                else if (dy < 20) {
-                    float t = (dy - 3) / 17.0f;
-                    int inset = (int)(w * 0.32f * t * t);
-                    s.add(dy, x0 + 2 + inset, x1 - 2 - inset);
-                } else if (dy < 24) s.add(dy, cx - w / 5, cx + w / 5); // a carved collar
-                else s.add(dy, cx - w / 8, cx + w / 8);
-                break;
-            }
-            case GardenShape::RootKnot: { // a gnarled root knot over a thick root that dives into the spring
-                if (dy < 3) s.add(dy, x0, x1);
-                else if (dy < 22) {
-                    int bulge = (int)std::round(3.0f * std::sin((dy - 3) * 0.16f)) + (int)std::round(std::sin(dy * 0.7f + seed));
-                    s.add(dy, x0 - bulge, x1 + bulge);
-                } else if (dy < 34) {
-                    float t = (dy - 22) / 12.0f; // the knot narrows into the main root
-                    int inset = (int)(w * 0.3f * t);
-                    s.add(dy, x0 + inset, x1 - inset);
-                } else {
-                    int half = w * 20 / 100 + (int)std::round(std::sin(dy * 0.09f + seed) * 2.0f) + (dy > 90 ? (dy - 90) / 10 : 0);
-                    int sway = (int)std::round(std::sin(dy * 0.05f) * 3.0f);
-                    s.add(dy, cx - half + sway, cx + half + sway);
-                }
-                break;
-            }
-        }
-    }
+Shading barkShading(int seed, int darkenFrom) {
+    Shading s;
+    s.ramp = TREE_BARK;
+    s.steps = 6;
+    s.toLight = TO_MOON;
+    s.base = 0.4f;
+    s.rim = 0.36f;
+    s.bevel = 3.0f;
+    s.grain = 0.1f;
+    s.grainScale = 0.25f;
+    s.seed = seed;
+    s.darkenFrom = (float)darkenFrom;
+    s.darkenRange = 80.0f;
+    s.darkenAmount = 0.3f;
     return s;
 }
 
 // ---------------------------------------------------------------------------
-// Platform details
+// The current: the visible form of tail->next
 // ---------------------------------------------------------------------------
 
-// Small glowing blossoms along a walkable edge (they sit on top, like grass).
-void drawBlossoms(const Ledge& l, int count, float time) {
-    for (int i = 0; i < count; i++) {
-        int x = l.left + 2 + (int)(hash01(l.seed * 31 + i) * (l.width - 5));
-        Color color = (i % 3 == 0) ? BLOSSOM : ((i % 3 == 1) ? SPRING : PETAL);
-        float glow = 0.6f + 0.4f * std::sin(time * 2.0f + i * 1.7f);
-        DrawRectangle(x, l.top - 2, 1, 2, MOSS_DARK);
-        DrawRectangle(x - 1, l.top - 3, 3, 1, withAlpha(color, glow));
-    }
-}
-
-void drawGardenDetails(GardenShape shape, const Ledge& l, const Silhouette& s, float time) {
-    const int x0 = l.left;
-    const int x1 = l.left + l.width;
-    switch (shape) {
-        case GardenShape::Terrace:
-            for (int dy = 9; dy < 60; dy += 8) { // stone courses
-                paintRows(s, dy, dy + 1, depthShade(STONE_SHADE, dy, DEPTH), 1);
-                for (int x = x0 + 3 + ((dy / 8) % 2) * 8; x < x1 - 2; x += 16) {
-                    for (int k = 1; k < 8; k++) if (insideSilhouette(s, x, dy + k)) DrawRectangle(x, l.top + dy + k, 1, 1, depthShade(STONE_SHADE, dy + k, DEPTH));
-                }
-            }
-            paintRows(s, 1, 3, MOSS, 0);
-            for (int i = 0; i < 5; i++) { // ivy over the wall
-                int x = x0 + 6 + (int)(hash01(l.seed * 7 + i) * (l.width - 12));
-                for (int k = 0; k < 10 + i * 3; k++) DrawRectangle(x + (k / 6) % 2, l.top + 3 + k, 1, 1, MOSS_DARK);
-            }
-            drawBlossoms(l, 7, time);
-            break;
-        case GardenShape::MoonCap: {
-            paintRows(s, 0, 1, CAP_TOP, 0);
-            paintRows(s, 1, 7, CAP, 0);
-            paintRows(s, 6, 7, CAP_DARK, 0);
-            paintRows(s, 7, 11, CAP_DARK, 0);
-            for (int dy = 7; dy < 11; dy++) { // gills
-                for (int x = x0; x < x1; x += 3) if (insideSilhouette(s, x, dy)) DrawRectangle(x, l.top + dy, 1, 1, DEPTH);
-            }
-            for (int i = 0; i < 7; i++) { // glowing spots on the cap
-                int x = x0 + 4 + (int)(hash01(l.seed * 13 + i) * (l.width - 8));
-                int y = l.top + 2 + (i % 3);
-                float pulse = 0.5f + 0.5f * std::sin(time * 1.8f + i * 1.3f);
-                DrawCircleGradient(x, y, 5.0f, withAlpha(SPRING, 0.25f * pulse), withAlpha(SPRING, 0.0f));
-                DrawRectangle(x, y, 2, 1, lerpColor(CAP_TOP, SPRING, pulse));
-            }
-            for (int dy = 11; dy < s.rows; dy++) { // the pale stalk, with a ring
-                if (s.count[dy] == 0) continue;
-                const Span& span = s.spans[dy][0];
-                Color stalk = depthShade((dy == 18 || dy == 19) ? STONE_LIGHT : STALK, dy, DEPTH);
-                DrawRectangle(span.left, l.top + dy, span.right - span.left, 1, stalk);
-                DrawRectangle(span.left, l.top + dy, 2, 1, depthShade(STONE_DARK, dy, DEPTH));
-            }
-            break;
-        }
-        case GardenShape::Planter:
-            paintRows(s, 0, 1, STONE_LIGHT, 0);
-            paintRows(s, 8, 9, STONE_SHADE, 3);
-            for (int x = x0 + 8; x < x1 - 8; x += 6) DrawRectangle(x, l.top + 11, 3, 2, STONE_LIGHT); // carved band
-            paintRows(s, 20, 24, STONE_LIGHT, 0);
-            for (int i = 0; i < 4; i++) { // trailing vines over the rim, swaying from where they hang
-                int x = x0 + 4 + i * (l.width - 8) / 3;
-                int length = 8 + i * 4;
-                for (int k = 0; k < length; k++) {
-                    int sway = (int)std::round(std::sin(time + i * 1.3f + k * 0.15f) * (k / (float)length) * 1.8f);
-                    DrawRectangle(x + sway, l.top + 2 + k, 1, 1, MOSS_DARK);
-                }
-            }
-            drawBlossoms(l, 10, time);
-            break;
-        case GardenShape::RootKnot:
-            for (int dy = 4; dy < s.rows; dy += 3) { // bark grooves
-                for (int i = 0; i < s.count[dy]; i++) {
-                    const Span& span = s.spans[dy][i];
-                    for (int x = span.left + 2; x < span.right - 2; x += 5) {
-                        if (hash01(l.seed + dy * 31 + x) < 0.6f) DrawRectangle(x, l.top + dy, 1, 2, depthShade(BARK_DARK, dy, DEPTH));
-                    }
-                }
-            }
-            for (int i = 0; i < 4; i++) { // glowing runes in the bark
-                float pulse = 0.5f + 0.5f * std::sin(time * 2.0f + i);
-                DrawRectangle(x0 + 12 + i * (l.width - 24) / 3, l.top + 9 + (i % 2) * 4, 2, 2, withAlpha(SPRING, 0.4f + 0.5f * pulse));
-            }
-            for (int side = 0; side < 2; side++) { // two side roots curling down and out from the knot
-                float startX = (side == 0) ? x0 + 10.0f : x1 - 10.0f;
-                float direction = (side == 0) ? -1.0f : 1.0f;
-                Vector2 previous = {startX, l.top + 20.0f};
-                for (int k = 1; k <= 16; k++) {
-                    float t = k / 16.0f;
-                    Vector2 point = {startX + direction * (26.0f * t * t + 4.0f * t), l.top + 20.0f + 56.0f * t};
-                    float thickness = 6.0f * (1.0f - t) + 1.5f;
-                    DrawLineEx(previous, point, thickness + 2.0f, DARK);
-                    DrawLineEx(previous, point, thickness, depthShade(BARK, 20 + (int)(56.0f * t), DEPTH));
-                    previous = point;
-                }
-            }
-            drawBlossoms(l, 4, time);
-            break;
-    }
-}
-
-// ---------------------------------------------------------------------------
-// The Great Root: the visible form of tail->next.
-// ---------------------------------------------------------------------------
-
-struct RootPath {
-    Vector2 start;   // at the tail's hollow
-    Vector2 control; // pulls the curve up into an arch
-    Vector2 end;     // above the node that tail->next points to
+// A path through a few points, smoothed (Catmull-Rom).
+struct Flow {
+    Vector2 points[8];
+    int count = 0;
 };
 
-Vector2 pointOnRoot(const RootPath& p, float t) {
-    float u = 1.0f - t;
-    return Vector2{u * u * p.start.x + 2.0f * u * t * p.control.x + t * t * p.end.x,
-                   u * u * p.start.y + 2.0f * u * t * p.control.y + t * t * p.end.y};
+Vector2 flowPoint(const Flow& f, float t) {
+    t = std::clamp(t, 0.0f, 1.0f) * (f.count - 1);
+    int i = std::min((int)t, f.count - 2);
+    float u = t - i;
+    Vector2 p0 = f.points[std::max(0, i - 1)], p1 = f.points[i], p2 = f.points[i + 1], p3 = f.points[std::min(f.count - 1, i + 2)];
+    float u2 = u * u, u3 = u2 * u;
+    auto blend = [&](float a, float b, float c, float d) {
+        return 0.5f * (2.0f * b + (-a + c) * u + (2.0f * a - 5.0f * b + 4.0f * c - d) * u2 + (-a + 3.0f * b - 3.0f * c + d) * u3);
+    };
+    return Vector2{blend(p0.x, p1.x, p2.x, p3.x), blend(p0.y, p1.y, p2.y, p3.y)};
 }
 
-// Finds the tail (the node whose next is the head) and builds the arch from it to tail->next.
-bool findRootPath(const SceneView& view, RootPath& path) {
+// The current runs from the hollow on the tail to the node the tail's next points to. Its ends
+// come from the real nodes, found by walking the list; its middle bends under the tree's roots.
+bool returnFlow(const SceneView& view, Flow& flow) {
     const Node* head = view.head;
     const Node* tail = head;
     int steps = 0;
@@ -242,64 +106,463 @@ bool findRootPath(const SceneView& view, RootPath& path) {
         tail = tail->next;
         steps++;
     }
-    if (tail == nullptr || tail->next == nullptr) return false; // not a circle: nothing to draw
-    const Node* target = tail->next;                            // the real link
-    Ledge from = ledgeFor(*tail, view.cameraX);
-    Ledge to = ledgeFor(*target, view.cameraX);
-    path.start = Vector2{(float)(from.left + from.width - 9), (float)(from.top - 2)};
-    path.end = Vector2{(float)(to.left + to.width / 2), (float)(to.top - 2)};
-    path.control = Vector2{(path.start.x + path.end.x) / 2.0f, -110.0f};
+    if (tail == nullptr || tail->next == nullptr) return false; // not a circle: no way back to draw
+    const Node* target = tail->next;                            // the real link (it is the head)
+    Vector2 start = {(float)toCanvasX(tail->platformPosition.x + tail->platformWidth - 18.0f, view.cameraX),
+                     (float)toCanvasY(tail->platformPosition.y) - 13.0f};
+    Vector2 end = {(float)toCanvasX(target->platformPosition.x + target->platformWidth - 44.0f, view.cameraX),
+                   (float)toCanvasY(target->platformPosition.y) + 13.0f}; // the basin in the head's wall
+    float middle = (start.x + end.x) * 0.5f;
+    flow.count = 8;
+    flow.points[0] = start;
+    flow.points[1] = Vector2{start.x + 16.0f, start.y + 24.0f};
+    flow.points[2] = Vector2{start.x + 8.0f, (float)SPRING_Y - 14.0f};
+    flow.points[3] = Vector2{middle + 90.0f, (float)SPRING_Y + 4.0f};
+    flow.points[4] = Vector2{middle - 40.0f, (float)SPRING_Y + 8.0f};
+    flow.points[5] = Vector2{end.x + 60.0f, (float)SPRING_Y - 2.0f};
+    flow.points[6] = Vector2{end.x + 24.0f, end.y + 16.0f};
+    flow.points[7] = end;
     return true;
 }
 
-void drawGreatRoot(const RootPath& path, const SceneView& view) {
-    const int segments = 160;
-    const Color bark = lerpColor(BARK, MID_GARDEN, 0.25f);
-    // Half thickness along the root: slender at the top of the arch, thick where it meets the ground.
-    auto thicknessAt = [](float t) { float edge = std::fabs(t - 0.5f) * 2.0f; return 3.0f + 3.5f * edge * edge; };
+// ---------------------------------------------------------------------------
+// Platforms
+// ---------------------------------------------------------------------------
 
-    for (int pass = 0; pass < 2; pass++) { // a dark outline, then the bark
-        Vector2 previous = pointOnRoot(path, 0.0f);
-        for (int i = 1; i <= segments; i++) {
-            float t = i / (float)segments;
-            Vector2 point = pointOnRoot(path, t);
-            float half = thicknessAt(t);
-            DrawLineEx(previous, point, pass == 0 ? half * 2.0f + 2.0f : half * 2.0f, pass == 0 ? DARK : bark);
-            previous = point;
-        }
-    }
-    Vector2 previous = pointOnRoot(path, 0.0f);
-    for (int i = 1; i <= segments; i++) { // the lit upper edge and a darker groove along the root
-        float t = i / (float)segments;
-        Vector2 point = pointOnRoot(path, t);
-        float dx = point.x - previous.x;
-        float dy = point.y - previous.y;
-        float length = std::sqrt(dx * dx + dy * dy);
-        if (length > 0.001f) {
-            Vector2 up = {dy / length, -dx / length};
-            if (up.y > 0.0f) up = Vector2{-up.x, -up.y};
-            float half = thicknessAt(t);
-            DrawRectangle((int)(point.x + up.x * (half - 1.0f)), (int)(point.y + up.y * (half - 1.0f)), 1, 1, withAlpha(BARK_LIGHT, 0.8f));
-            if (i % 3 == 0) DrawRectangle((int)(point.x - up.x * 1.0f), (int)(point.y - up.y * 1.0f), 1, 1, BARK_DARK);
-        }
-        previous = point;
-    }
-    for (int i = 1; i < 18; i++) { // moss, hanging leaves, blossoms, and runes that glow along the root
-        float t = i / 18.0f;
-        Vector2 point = pointOnRoot(path, t);
-        int up = (int)thicknessAt(t);
-        DrawRectangle((int)point.x - 2, (int)point.y - up, 4, 1, MOSS);
-        if (i % 2 == 0) {
-            for (int k = 0; k < 3 + i % 4; k++) DrawRectangle((int)point.x + (i % 3) - 1, (int)point.y + up + k, 1, 1, MOSS_DARK);
-        }
-        if (i % 5 == 0) DrawRectangle((int)point.x + 1, (int)point.y - up - 1, 2, 1, BLOSSOM);
-        float glow = 0.35f + 0.3f * std::sin(view.time * 2.0f - t * 6.0f);
-        if (view.passage >= 0.0f) glow += 0.8f * std::fmax(0.0f, 1.0f - std::fabs(view.passage - t) * 6.0f);
-        if (i % 2 == 1) DrawRectangle((int)point.x, (int)point.y - 1, 2, 2, withAlpha(SPRING, std::fmin(1.0f, glow)));
+void paintBlossoms(Picture& p, int x0, int x1, int top, int count, int seed) {
+    const Color colors[3] = {BLOSSOM, PETAL, WISTERIA};
+    for (int i = 0; i < count; i++) {
+        int x = x0 + 2 + (int)(hash01(seed * 31 + i) * (x1 - x0 - 4));
+        p.set(x, top - 1, MOSS[1]);
+        p.set(x, top - 2, colors[i % 3]);
+        if (i % 2 == 0) p.set(x + 1, top - 2, scaleColor(colors[i % 3], 0.8f));
     }
 }
 
-// The hollow at the tail end of the root. It glows more as the player comes near (ready = on the tail).
+void paintMossTop(Picture& p, const Mask& m, int x0, int x1, int top, int seed) {
+    for (int x = x0; x < x1; x++) {
+        int y = top;
+        while (y < p.height && !m.at(x, y)) y++;
+        if (y > top + 5) continue;
+        int t = 2 + (int)(noise2(x * 0.3f, 0.0f, seed) * 3.0f);
+        for (int k = 0; k <= t && m.at(x, y + k); k++) {
+            p.set(x, y + k, pickRamp(MOSS, 5, 0.95f - k * 0.2f, x, y + k));
+        }
+        if (hash01(seed * 17 + x) < 0.12f) {
+            for (int k = t + 1; k < t + 3 + (int)(hash01(seed + x) * 5.0f); k++) if (m.at(x, y + k)) p.set(x, y + k, MOSS[1]);
+        }
+    }
+}
+
+void paintMasonry(Picture& p, const Mask& m, int fromY, int course, int block, int seed) {
+    for (int y = fromY, row = 0; y < p.height; y += course, row++) {
+        for (int x = 0; x < p.width; x++) if (m.at(x, y) && m.depth[y * p.width + x] > 1.0f) p.set(x, y, STONE[1]);
+        for (int x = (row % 2) * (block / 2) + (int)(hash01(seed + row) * 3.0f); x < p.width; x += block) {
+            for (int k = 1; k < course; k++) if (m.at(x, y + k) && m.depth[(y + k) * p.width + x] > 1.0f) p.set(x, y + k, STONE[1]);
+        }
+    }
+}
+
+// N1: the garden gate's terrace, with a basin where the current arrives.
+void paintGardenGate(LedgeCanvas& c, int seed) {
+    Picture& p = c.picture;
+    const int ox = c.originX, oy = c.originY, w = c.width;
+    Mask m(p.width, p.height);
+    for (int y = oy; y < p.height; y++) {
+        int dy = y - oy;
+        int spread = (dy > 34) ? (dy - 34) / 6 : 0; // the wall steps out at its foot
+        if (dy == 0) m.span(y, ox, ox + w);
+        else if (dy < 4) m.span(y, ox - 1, ox + w + 1);
+        else m.span(y, ox + 1 - spread, ox + w - 1 + spread);
+    }
+    m.measure();
+    shade(p, m, stoneShading(seed, oy + 30));
+    paintMasonry(p, m, oy + 6, 8, 16, seed);
+    int bx = ox + w - 22, by = oy + 12; // the basin
+    for (int x = -8; x <= 8; x++) {
+        for (int y = 0; y < 6; y++) {
+            if (y > 3 && std::abs(x) > 8 - (y - 3) * 2) continue;
+            p.set(bx + x, by + y, (y == 0) ? STONE[5] : STONE[0]);
+        }
+    }
+    for (int i = 0; i < 5; i++) { // ivy over the wall
+        int x = ox + 6 + (int)(hash01(seed * 7 + i) * (w - 12));
+        for (int k = 0; k < 10 + i * 4; k++) {
+            int wx = x + (k / 6) % 2;
+            p.set(wx, oy + 3 + k, MOSS[1]);
+            if (k % 3 == 1) p.set(wx + 1, oy + 3 + k, MOSS[2]);
+        }
+    }
+    paintMossTop(p, m, 0, p.width, oy, seed);
+    paintBlossoms(p, ox + 26, ox + w, oy, 6, seed);
+}
+
+// N2: a giant moon-cap mushroom with a pale stalk.
+void paintMoonCap(LedgeCanvas& c, int seed) {
+    Picture& p = c.picture;
+    const int ox = c.originX, oy = c.originY, w = c.width;
+    const int cx = ox + w / 2;
+    Mask stalk(p.width, p.height);
+    for (int y = oy + 8; y < p.height; y++) {
+        int dy = y - oy;
+        int half = 6 + ((dy > 46) ? (dy - 46) / 7 : 0) + ((dy >= 22 && dy <= 24) ? 3 : 0); // flared base and a ring
+        stalk.span(y, cx - half, cx + half);
+    }
+    stalk.measure();
+    Shading s;
+    s.ramp = STALK;
+    s.steps = 4;
+    s.toLight = TO_MOON;
+    s.base = 0.55f;
+    s.rim = 0.4f;
+    s.bevel = 4.0f;
+    s.grain = 0.06f;
+    s.seed = seed;
+    s.darkenFrom = (float)(oy + 30);
+    s.darkenRange = 80.0f;
+    s.darkenAmount = 0.4f;
+    shade(p, stalk, s);
+
+    Mask cap(p.width, p.height);
+    for (int y = oy; y < oy + 11; y++) {
+        int dy = y - oy;
+        if (dy == 0) cap.span(y, ox, ox + w);
+        else if (dy < 4) cap.span(y, ox - 2, ox + w + 2);
+        else if (dy < 7) cap.span(y, ox - 1 + (dy - 4), ox + w + 1 - (dy - 4));
+        else cap.span(y, ox + 4 + (dy - 7) * 4, ox + w - 4 - (dy - 7) * 4); // the gills, narrowing toward the stalk
+    }
+    cap.measure();
+    for (int y = oy; y < oy + 11; y++) {
+        for (int x = 0; x < p.width; x++) {
+            if (!cap.at(x, y)) continue;
+            int dy = y - oy;
+            float v = (dy == 0) ? 0.95f : 0.78f - dy * 0.07f;
+            if (dy >= 7) v = ((x - cx) % 3 == 0) ? 0.05f : 0.25f; // gills
+            p.set(x, y, pickRamp(CAP, 5, v + (noise2(x * 0.4f, y * 0.4f, seed) - 0.5f) * 0.15f, x, y));
+        }
+    }
+    for (int i = 0; i < 7; i++) { // pale spots on the cap
+        int x = ox + 4 + (int)(hash01(seed * 13 + i) * (w - 8));
+        int y = oy + 2 + (i % 3);
+        p.set(x, y, CAP[4]);
+        p.set(x + 1, y, CAP[4]);
+    }
+}
+
+// N3: a stone flower bed lodged against the ancient tree, held up by its roots.
+void paintFlowerBed(LedgeCanvas& c, int seed) {
+    Picture& p = c.picture;
+    const int ox = c.originX, oy = c.originY, w = c.width;
+    Mask roots(p.width, p.height);
+    roots.capsule({ox + w * 0.3f, oy + 16.0f}, {ox + 6.0f, oy + 60.0f}, 7.0f, 3.0f);
+    roots.capsule({ox + w * 0.65f, oy + 16.0f}, {ox + w - 4.0f, oy + 72.0f}, 8.0f, 3.0f);
+    roots.capsule({ox + w * 0.5f, oy + 16.0f}, {ox + w * 0.48f, (float)p.height}, 11.0f, 15.0f);
+    roots.measure();
+    shade(p, roots, barkShading(seed + 1, oy + 30));
+    fogRows(p, DARK, oy + 40, p.height, 0.0f, 0.55f);
+
+    Mask bed(p.width, p.height);
+    for (int y = oy; y < oy + 19; y++) {
+        int dy = y - oy;
+        if (dy == 0) bed.span(y, ox, ox + w);
+        else if (dy < 3) bed.span(y, ox - 1, ox + w + 1);   // the rim
+        else if (dy < 15) bed.span(y, ox + 1, ox + w - 1);  // the planter
+        else bed.span(y, ox - 1 + (dy - 15), ox + w + 1 - (dy - 15)); // its molding
+    }
+    bed.measure();
+    shade(p, bed, stoneShading(seed, oy + 40));
+    for (int x = ox - 1; x < ox + w + 1; x++) p.set(x, oy + 1, STONE[5]);
+    for (int x = ox + 5; x < ox + w - 5; x += 7) { // a carved band
+        p.rect(x, oy + 8, 3, 2, STONE[4]);
+        p.set(x + 1, oy + 9, STONE[1]);
+    }
+    for (int i = 0; i < 3; i++) { // vines trailing over the rim
+        int x = ox + 6 + i * (w - 12) / 2;
+        for (int k = 0; k < 6 + i * 4; k++) p.set(x + (k / 4) % 2, oy + 3 + k, MOSS[1 + (k % 2)]);
+    }
+    paintBlossoms(p, ox, ox + 26, oy, 6, seed);
+    paintBlossoms(p, ox + w - 26, ox + w, oy, 6, seed + 3);
+}
+
+// N4: a gnarled root knot at the tail of the loop; its hollow stands at the far end.
+void paintRootKnot(LedgeCanvas& c, int seed) {
+    Picture& p = c.picture;
+    const int ox = c.originX, oy = c.originY, w = c.width;
+    Mask m(p.width, p.height);
+    for (int y = oy; y < p.height; y++) {
+        int dy = y - oy;
+        if (dy == 0) { m.span(y, ox, ox + w); continue; }
+        if (dy < 4) { m.span(y, ox - 1, ox + w + 1); continue; }
+        int bulge = (int)std::lround(3.0f * std::sin(std::min(dy, 22) / 22.0f * 3.14159f));
+        int left = ox - bulge, right = ox + w + bulge;
+        if (dy > 22) { // the knot narrows into a neck, then spreads into roots near the ground
+            float neck = std::fmin(1.0f, (dy - 22) / 24.0f);
+            float spread = std::fmax(0.0f, (dy - 64) / 30.0f);
+            left = ox + (int)(16.0f * neck - 22.0f * spread);
+            right = ox + w - (int)(10.0f * neck - 26.0f * spread);
+        }
+        m.span(y, left + (int)(hash01(seed + dy / 3) * 2.0f), right);
+    }
+    m.capsule({ox + 8.0f, oy + 20.0f}, {ox - 20.0f, oy + 70.0f}, 6.0f, 2.0f); // side roots curling out
+    m.capsule({ox + w - 6.0f, oy + 24.0f}, {ox + w + 18.0f, oy + 80.0f}, 6.0f, 2.0f);
+    m.measure();
+    shade(p, m, barkShading(seed, oy + 26));
+    for (int y = oy + 4; y < p.height; y += 3) { // bark grooves following the root
+        for (int x = 0; x < p.width; x += 5) {
+            int gx = x + ((y / 3) % 2) * 2;
+            if (m.at(gx, y) && m.depth[y * p.width + gx] > 2.0f && hash01(seed + y * 31 + gx) < 0.6f) {
+                p.set(gx, y, TREE_BARK[1]);
+                p.set(gx, y + 1, TREE_BARK[1]);
+            }
+        }
+    }
+    for (int i = 0; i < 5; i++) { // runes that glow faintly in the bark
+        int x = ox + 12 + i * (w - 24) / 4;
+        int y = oy + 10 + (i % 2) * 5;
+        p.rect(x, y, 2, 2, mixColor(SPRING, TREE_BARK[2], 0.35f));
+    }
+    paintMossTop(p, m, 0, p.width, oy, seed);
+    paintBlossoms(p, ox + 4, ox + w - 30, oy, 4, seed);
+}
+
+void paintGardenLedge(const Node& node, LedgeCanvas& c) {
+    int seed = node.id * 37 + 11;
+    switch (node.id) {
+        case 1: paintGardenGate(c, seed); break;
+        case 2: paintMoonCap(c, seed); break;
+        case 3: paintFlowerBed(c, seed); break;
+        default: paintRootKnot(c, seed); break;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Scenery
+// ---------------------------------------------------------------------------
+
+Picture paintCrown(float r, int seed) {
+    int size = (int)(r * 3.4f);
+    Picture piece(size, size);
+    float c = size * 0.5f;
+    paintFoliage(piece, c - r * 0.75f, c + r * 0.25f, r * 0.62f, TREE_LEAF, 5, TO_MOON, seed + 1);
+    paintFoliage(piece, c + r * 0.75f, c + r * 0.2f, r * 0.6f, TREE_LEAF, 5, TO_MOON, seed + 2);
+    paintFoliage(piece, c, c, r, TREE_LEAF, 5, TO_MOON, seed);
+    for (int i = 0; i < (int)(r * 2.0f); i++) { // blossoms scattered through the leaves
+        float angle = hash01(seed * 7 + i) * 6.283f;
+        float d = std::sqrt(hash01(seed * 11 + i)) * r * 1.2f;
+        int x = (int)(c + std::cos(angle) * d), y = (int)(c + std::sin(angle) * d * 0.8f);
+        if (!piece.painted(x, y)) continue;
+        Color bloom = (i % 3 == 0) ? PETAL : BLOSSOM;
+        piece.set(x, y, mixColor(bloom, TREE_LEAF[2], (y < c) ? 0.1f : 0.45f)); // brighter where the moon reaches
+    }
+    return piece;
+}
+
+Picture paintWisteria(int strands, int length, int seed) {
+    Picture p(strands * 5 + 4, length + 2);
+    for (int s = 0; s < strands; s++) {
+        int len = length / 2 + (int)(hash01(seed + s * 5) * length / 2);
+        for (int k = 0; k < len; k++) {
+            int width = std::max(1, 3 - k * 3 / len);
+            int x = 2 + s * 5 + (int)std::lround(std::sin(k * 0.2f + s) * 0.8f);
+            for (int i = 0; i < width; i++) {
+                Color bloom = ((k + i) % 3 == 0) ? WISTERIA : mixColor(WISTERIA, TREE_LEAF[1], 0.45f);
+                p.set(x + i - width / 2, k, bloom);
+            }
+        }
+    }
+    return p;
+}
+
+Picture paintFern(int size, int seed) {
+    Picture p(size, size);
+    int fronds = 4 + (int)(hash01(seed) * 3.0f);
+    for (int f = 0; f < fronds; f++) {
+        float spread = (f - (fronds - 1) * 0.5f) / fronds;
+        float length = size * (0.6f + 0.35f * hash01(seed * 3 + f));
+        for (int k = 0; k < (int)length; k++) {
+            float t = k / length;
+            int x = (int)(size * 0.5f + spread * length * 1.5f * t + spread * length * 0.7f * t * t);
+            int y = size - 1 - (int)(length * (t - 0.35f * t * t));
+            p.set(x, y, FERN[1]);
+            if (k % 3 == 1 && k > 2) {
+                p.set(x - 1, y, FERN[(f % 2 == 0) ? 2 : 0]);
+                p.set(x + 1, y - 1, FERN[1]);
+            }
+        }
+    }
+    return p;
+}
+
+void bakeGarden(RegionArt& art, const World& world) {
+    Picture sky(CANVAS_WIDTH, CANVAS_HEIGHT);
+    ditherGradient(sky, 0, 180, SKY_TOP, SKY_MID);
+    ditherGradient(sky, 180, CANVAS_HEIGHT, SKY_MID, SKY_LOW);
+    for (int i = 0; i < 110; i++) {
+        int x = (int)(hash01(i * 7 + 3) * CANVAS_WIDTH);
+        int y = (int)(hash01(i * 11 + 5) * 180.0f);
+        sky.set(x, y, mixColor(SKY_MID, MOON, 0.3f + 0.6f * hash01(i * 3)));
+    }
+    for (int y = -20; y <= 20; y++) { // the moon, with soft seas and a darker rim
+        for (int x = -20; x <= 20; x++) {
+            float d = std::sqrt((float)(x * x + y * y));
+            if (d > 16.5f) continue;
+            float sea = fbm2((x + 60) * 0.15f, (y + 60) * 0.15f, 9, 3);
+            float rim = (d / 16.5f) * (d / 16.5f);
+            Color c = mixColor(MOON, SKY_LOW, 0.1f + 0.18f * rim);
+            sky.set((int)MOON_X + x, (int)MOON_Y + y, (sea > 0.55f) ? mixColor(c, SKY_LOW, 0.3f) : c);
+        }
+    }
+    storeLayer(art, sky, 0.0f, 0);
+
+    // Rolling hills with cypresses, and an overgrown observatory on the far right.
+    Picture hills(CANVAS_WIDTH, CANVAS_HEIGHT);
+    for (int x = 0; x < CANVAS_WIDTH; x++) {
+        float y = 214.0f + std::sin(x * 0.011f + 1.3f) * 14.0f + std::sin(x * 0.027f) * 6.0f;
+        int top = (int)(std::floor(y / 2.0f) * 2.0f);
+        for (int yy = top; yy < CANVAS_HEIGHT; yy++) hills.set(x, yy, HILLS[(yy - top < 2) ? 2 : 0]);
+    }
+    for (int i = 0; i < 14; i++) {
+        int x = 20 + i * 46 + (int)(hash01(i * 13 + 2) * 20.0f);
+        int height = 26 + (int)(hash01(i * 17 + 4) * 26.0f);
+        int base = 214 + (int)(std::sin(x * 0.011f + 1.3f) * 14.0f);
+        for (int k = 0; k < height; k++) {
+            int half = (int)(5.0f * std::sin((k + 2.0f) / (height + 2.0f) * 3.14159f));
+            for (int xx = -half; xx <= half; xx++) hills.set(x + xx, base - k, HILLS[(xx < 0) ? 1 : 0]);
+        }
+    }
+    for (int y = -18; y <= 0; y++) {
+        for (int x = -18; x <= 18; x++) if (x * x + y * y <= 18 * 18) hills.set(566 + x, 206 + y, HILLS[1]);
+    }
+    hills.rect(548, 206, 36, 12, HILLS[1]);
+    hills.rect(564, 190, 3, 16, HILLS[3]);
+    fogRows(hills, MIST, 180, 300, 0.25f, 0.5f);
+    storeLayer(art, hills, 0.0f, 0);
+
+    // The garden behind the route: hedges with glowing flowers, and two stone lanterns.
+    Picture garden(CANVAS_WIDTH, CANVAS_HEIGHT);
+    for (int i = 0; i < 10; i++) {
+        float x = 10.0f + i * 68.0f + hash01(i * 7 + 3) * 20.0f;
+        float y = 280.0f + hash01(i * 11 + 1) * 12.0f;
+        paintFoliage(garden, x, y, 16.0f + hash01(i * 13 + 5) * 9.0f, HEDGE, 4, TO_MOON, 140 + i, 0.25f);
+    }
+    garden.rect(0, 290, CANVAS_WIDTH, CANVAS_HEIGHT - 290, HEDGE[0]);
+    const int lanternX[2] = {168, 470};
+    for (int i = 0; i < 2; i++) {
+        int x = lanternX[i], base = 300;
+        garden.rect(x - 6, base - 4, 12, 4, STONE[1]);
+        garden.rect(x - 2, base - 16, 4, 12, STONE[1]);
+        garden.rect(x - 5, base - 24, 10, 8, STONE[1]);
+        garden.rect(x - 3, base - 22, 6, 4, Color{255, 214, 150, 255});
+        for (int k = 0; k < 7; k++) garden.rect(x - 9 + k, base - 25 - k, 18 - k * 2, 1, STONE[2]);
+    }
+    fogRows(garden, MIST, 240, 320, 0.2f, 0.32f);
+    storeLayer(art, garden, 0.0f, 0);
+
+    // The ancient tree: trunk, boughs, and roots that arch over the spring.
+    Picture tree(CANVAS_WIDTH, CANVAS_HEIGHT);
+    paintTrunk(tree, TREE_X, 30.0f, 300.0f, 26.0f, 36.0f, TREE_BARK, 6, TO_MOON, 31);
+    Mask limbs(CANVAS_WIDTH, CANVAS_HEIGHT);
+    limbs.capsule({TREE_X - 14.0f, 120.0f}, {TREE_X - 120.0f, 54.0f}, 12.0f, 7.0f);
+    limbs.capsule({TREE_X - 120.0f, 54.0f}, {TREE_X - 230.0f, 26.0f}, 7.0f, 3.0f);
+    limbs.capsule({TREE_X + 14.0f, 104.0f}, {TREE_X + 126.0f, 50.0f}, 11.0f, 6.0f);
+    limbs.capsule({TREE_X + 126.0f, 50.0f}, {TREE_X + 220.0f, 36.0f}, 6.0f, 3.0f);
+    limbs.capsule({TREE_X - 18.0f, 286.0f}, {TREE_X - 70.0f, 318.0f}, 17.0f, 12.0f); // the root arch
+    limbs.capsule({TREE_X - 70.0f, 318.0f}, {TREE_X - 120.0f, 364.0f}, 12.0f, 9.0f);
+    limbs.capsule({TREE_X + 18.0f, 286.0f}, {TREE_X + 76.0f, 316.0f}, 16.0f, 11.0f);
+    limbs.capsule({TREE_X + 76.0f, 316.0f}, {TREE_X + 128.0f, 364.0f}, 11.0f, 9.0f);
+    limbs.measure();
+    shade(tree, limbs, barkShading(32, 230));
+    for (int y = 40; y < 300; y++) { // grooves along the trunk
+        for (int g = 0; g < 5; g++) {
+            int x = (int)(TREE_X - 18.0f + g * 9.0f + std::sin(y * 0.04f + g * 1.9f) * 2.0f);
+            if (tree.painted(x, y) && noise2(x * 0.3f, y * 0.07f, g + 50) > 0.38f) tree.set(x, y, TREE_BARK[1]);
+        }
+    }
+    for (int i = 0; i < 9; i++) { // faint runes in the bark, like the ones on the tail's roots
+        int x = (int)TREE_X - 16 + (int)(hash01(i * 5 + 1) * 32.0f);
+        int y = 80 + i * 22;
+        tree.rect(x, y, 2, 2, mixColor(SPRING, TREE_BARK[2], 0.55f));
+    }
+    storeLayer(art, tree, 0.0f, 0);
+    const float crowns[9][3] = {{40.0f, 18.0f, 30.0f},  {120.0f, 30.0f, 34.0f}, {200.0f, 10.0f, 40.0f}, {290.0f, 30.0f, 38.0f},
+                                {380.0f, 6.0f, 46.0f},  {470.0f, 28.0f, 40.0f}, {552.0f, 12.0f, 38.0f}, {626.0f, 30.0f, 32.0f},
+                                {340.0f, 50.0f, 26.0f}};
+    for (int i = 0; i < 9; i++) {
+        Picture piece = paintCrown(crowns[i][2], 200 + i * 13);
+        storeSway(art, piece, TREE_LAYER, false, crowns[i][0] - piece.width * 0.5f, crowns[i][1] - piece.height * 0.5f, 1.8f,
+                  true, 3, 0.2f * i);
+    }
+    const float wisteriaX[6] = {96.0f, 196.0f, 300.0f, 430.0f, 512.0f, 600.0f};
+    for (int i = 0; i < 6; i++) {
+        Picture strands = paintWisteria(3, 26 + (i % 3) * 10, 260 + i * 7);
+        storeSway(art, strands, TREE_LAYER, false, wisteriaX[i], 34.0f + (i % 2) * 10.0f, 2.6f, true, 6, 0.15f * i);
+    }
+
+    const Node* head = world.getHead(2);
+    const Node* node = head;
+    for (int steps = 0; node != nullptr && steps < MAX_NODES_PER_REGION; steps++) {
+        LedgeCanvas canvas = makeLedgeCanvas(*node, 30, 12);
+        paintGardenLedge(*node, canvas);
+        storeLedge(art, *node, canvas);
+        node = node->next;
+        if (node == head) break; // circular list: stop when back at the start
+    }
+
+    // Foreground: ferns in the corners and wisteria over the top edge.
+    storeEmptyLayer(art, 1.0f, true);
+    const float fernX[5] = {-12.0f, 24.0f, 250.0f, 560.0f, 604.0f};
+    for (int i = 0; i < 5; i++) {
+        int size = 36 + (int)(hash01(i * 7 + 2) * 22.0f);
+        Picture fern = paintFern(size, 300 + i * 9);
+        storeSway(art, fern, 0, true, fernX[i], (float)(CANVAS_HEIGHT - size + 3), 2.0f, false, 4, 0.2f * i);
+    }
+    const float topX[4] = {-10.0f, 70.0f, 520.0f, 590.0f};
+    for (int i = 0; i < 4; i++) {
+        Picture strands = paintWisteria(4, 34 + (i % 2) * 16, 330 + i * 5);
+        storeSway(art, strands, 0, true, topX[i], -4.0f, 3.0f, true, 6, 0.25f * i);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Live pieces
+// ---------------------------------------------------------------------------
+
+// The current: a ribbon of light with waves running along it and petals riding it.
+void drawCurrent(const Flow& flow, float time, float surge) {
+    float length = 0.0f; // sample it densely enough that the ribbon has no gaps
+    for (int i = 1; i <= 64; i++) {
+        Vector2 a = flowPoint(flow, (i - 1) / 64.0f), b = flowPoint(flow, i / 64.0f);
+        length += std::sqrt((b.x - a.x) * (b.x - a.x) + (b.y - a.y) * (b.y - a.y));
+    }
+    const int samples = (int)(length * 1.6f) + 2;
+    for (int i = 0; i < samples; i++) {
+        float t = i / (float)(samples - 1);
+        Vector2 p = flowPoint(flow, t);
+        Vector2 q = flowPoint(flow, std::fmin(1.0f, t + 0.004f));
+        float dx = q.x - p.x, dy = q.y - p.y, d = std::sqrt(dx * dx + dy * dy) + 0.001f;
+        Vector2 side = {-dy / d, dx / d};
+        float wave = 0.5f + 0.5f * std::sin(t * length * 0.12f - time * 4.0f); // bright swells running along it
+        float edgeFade = std::fmin(1.0f, std::fmin(t, 1.0f - t) * 14.0f);
+        Color core = lerpColor(SPRING, WHITE, 0.2f + 0.5f * wave * surge);
+        for (int w = -3; w <= 3; w++) {
+            int across = std::abs(w);
+            float a = (across == 3 ? 0.18f : (across == 2 ? 0.45f : (across == 1 ? 0.8f : 1.0f))) * edgeFade;
+            Color c = (across >= 2) ? SPRING : core;
+            DrawRectangle((int)std::floor(p.x + side.x * w), (int)std::floor(p.y + side.y * w), 1, 1, withAlpha(c, a));
+        }
+    }
+    for (int i = 0; i < 26; i++) { // petals riding the current
+        float speed = 0.07f + 0.04f * hash01(i * 3 + 1);
+        float t = std::fmod(time * speed + hash01(i * 7 + 2), 1.0f);
+        Vector2 p = flowPoint(flow, t);
+        float drift = std::sin(time * 2.0f + i) * 2.0f;
+        Color petal = (i % 3 == 0) ? WISTERIA : ((i % 3 == 1) ? PETAL : BLOSSOM);
+        bool flat = std::cos(time * 3.0f + i * 1.7f) > 0.0f;
+        DrawRectangle((int)p.x, (int)(p.y + drift), flat ? 2 : 1, flat ? 1 : 2, withAlpha(petal, loopEnvelope(t)));
+    }
+}
+
+// The hollow at the tail end: an arching root around a dark opening that glows as the traveler nears it.
 void drawRootHollow(Rectangle portal, const SceneView& view, bool ready) {
     int px = toCanvasX(portal.x, view.cameraX);
     int py = toCanvasY(portal.y);
@@ -308,12 +571,12 @@ void drawRootHollow(Rectangle portal, const SceneView& view, bool ready) {
     Vector2 center = {(float)(px + pw / 2), (float)(py + ph / 2 + 2)};
     float pulse = 0.5f + 0.5f * std::sin(view.time * 3.0f);
     float closeness = ready ? smooth01(1.0f - std::fabs(view.playerFeet.x - center.x) / 90.0f) * 0.7f + 0.3f : 0.0f;
-    DrawCircleGradient((int)center.x, (int)center.y, 20.0f + 14.0f * closeness, withAlpha(SPRING, 0.12f + 0.23f * closeness),
-                       withAlpha(SPRING, 0.0f));
     DrawEllipse((int)center.x, (int)center.y, 7.0f, 16.0f, DARK);
-    DrawEllipse((int)center.x, (int)center.y + 2, 5.0f, 12.0f, withAlpha(SPRING, 0.15f + (0.3f + 0.3f * pulse) * closeness));
-    DrawRing(Vector2{center.x, center.y - 4.0f}, 7.0f, 11.0f, 180.0f, 360.0f, 16, BARK);
-    DrawRing(Vector2{center.x, center.y - 4.0f}, 10.0f, 11.0f, 270.0f, 360.0f, 8, BARK_LIGHT);
+    DrawEllipse((int)center.x, (int)center.y + 2, 5.0f, 12.0f, withAlpha(SPRING, 0.2f + (0.3f + 0.3f * pulse) * closeness));
+    DrawRing(Vector2{center.x, center.y - 4.0f}, 7.0f, 11.0f, 180.0f, 360.0f, 16, TREE_BARK[2]);
+    DrawRing(Vector2{center.x, center.y - 4.0f}, 10.0f, 11.0f, 270.0f, 360.0f, 8, TREE_BARK[4]);
+    DrawRectangle((int)center.x - 11, (int)center.y - 4, 4, 22, TREE_BARK[2]);
+    DrawRectangle((int)center.x + 7, (int)center.y - 4, 4, 22, TREE_BARK[1]);
     for (int i = 0; closeness > 0.0f && i < 4; i++) { // petals drifting into the hollow
         float t = std::fmod(view.time * 0.5f + i * 0.25f, 1.0f);
         DrawRectangle((int)(center.x - 22.0f + t * 20.0f), (int)(center.y - 14.0f + std::sin(t * 6.0f + i) * 4.0f), 2, 1,
@@ -321,21 +584,8 @@ void drawRootHollow(Rectangle portal, const SceneView& view, bool ready) {
     }
 }
 
-// The traveler, as a mote of light, carried through the root from the tail to tail->next.
-void drawPassageMote(const RootPath& path, float t, float time) {
-    Vector2 point = pointOnRoot(path, t);
-    DrawCircleGradient((int)point.x, (int)point.y, 16.0f, withAlpha(SPRING, 0.55f), withAlpha(SPRING, 0.0f));
-    DrawRectangle((int)point.x - 1, (int)point.y - 1, 3, 3, WHITE);
-    for (int k = 1; k <= 7; k++) { // a trail of petals
-        float behind = t - k * 0.025f;
-        if (behind < 0.0f) break;
-        Vector2 p = pointOnRoot(path, behind);
-        DrawRectangle((int)p.x + (int)(std::sin(time * 8.0f + k) * 2.0f), (int)p.y + k, 2, 1, withAlpha(PETAL, 1.0f - k / 8.0f));
-    }
-}
-
-// A round moon gate at the exit. A curtain of wisteria hangs in it until the loop is complete;
-// then the strands part and draw up while the spring's light fills the ring (open: 0 -> 1).
+// A round moon gate on the head. Wisteria hangs in it until the loop is complete; then it
+// parts and draws up while the spring's light fills the ring (open: 0 -> 1).
 void drawMoonGate(Rectangle gate, int cameraX, float open, float time) {
     const int gx = toCanvasX(gate.x, cameraX);
     const int gy = toCanvasY(gate.y);
@@ -344,10 +594,8 @@ void drawMoonGate(Rectangle gate, int cameraX, float open, float time) {
     const float radius = 17.0f;
     const Vector2 center = {(float)(gx + gw / 2), (float)(gy + gh) - radius - 2.0f};
     const float light = smooth01(open);
-
     DrawCircleV(center, radius - 3.0f, withAlpha(Color{24, 16, 46, 255}, 1.0f - light));
     if (light > 0.0f) {
-        DrawCircleGradient((int)center.x, (int)center.y, 26.0f + 14.0f * light, withAlpha(SPRING, 0.35f * light), withAlpha(SPRING, 0.0f));
         DrawCircleV(center, radius - 3.0f, withAlpha(SPRING, 0.75f * light));
         DrawCircleV(center, (radius - 7.0f) * (0.4f + 0.6f * light), withAlpha(WHITE, 0.5f * light));
         for (int i = 0; i < 6; i++) {
@@ -357,7 +605,7 @@ void drawMoonGate(Rectangle gate, int cameraX, float open, float time) {
         }
     }
     if (open < 1.0f) {
-        for (int strand = 0; strand < 7; strand++) { // wisteria curtain: sways, then parts to the sides
+        for (int strand = 0; strand < 7; strand++) { // the curtain sways, then parts to the sides
             int part = (int)std::round((strand - 3) * light * 3.0f);
             int x = (int)center.x - 10 + strand * 3 + part;
             int length = (int)std::round((14 + (strand % 3) * 5) * (1.0f - 0.85f * light));
@@ -368,205 +616,111 @@ void drawMoonGate(Rectangle gate, int cameraX, float open, float time) {
             }
         }
     }
-    DrawRing(center, radius - 3.0f, radius + 2.0f, 0.0f, 360.0f, 40, STONE);
-    DrawRing(center, radius + 1.0f, radius + 2.0f, 270.0f, 360.0f, 12, STONE_LIGHT);
+    DrawRing(center, radius - 3.0f, radius + 2.0f, 0.0f, 360.0f, 40, STONE[3]);
+    DrawRing(center, radius + 1.0f, radius + 2.0f, 180.0f, 270.0f, 12, STONE[5]); // lit on the moon's side
     for (int i = 0; i < 6; i++) { // vines and blossoms on the ring
         float angle = 3.4f + i * 0.45f;
         int x = (int)(center.x + std::cos(angle) * radius);
         int y = (int)(center.y + std::sin(angle) * radius);
-        DrawRectangle(x, y, 2, 2, MOSS_DARK);
+        DrawRectangle(x, y, 2, 2, MOSS[1]);
         if (i % 2 == 0) DrawRectangle(x, y - 1, 1, 1, BLOSSOM);
     }
 }
 
-// ---------------------------------------------------------------------------
-// Background: night sky, distant hills, the ancient tree, the spring.
-// (This region fits on one screen, so the camera does not scroll here.)
-// ---------------------------------------------------------------------------
-
-void drawGardenSky(float time) {
-    DrawRectangleGradientV(0, 0, CANVAS_WIDTH, 180, SKY_TOP, SKY_MID);
-    DrawRectangleGradientV(0, 180, CANVAS_WIDTH, CANVAS_HEIGHT - 180, SKY_MID, SKY_LOW);
-    for (int i = 0; i < 70; i++) { // stars
-        int x = (int)(hash01(i * 7 + 3) * CANVAS_WIDTH);
-        int y = (int)(hash01(i * 11 + 5) * 170.0f);
-        float twinkle = 0.5f + 0.5f * std::sin(time * 1.5f + i * 1.9f);
-        DrawRectangle(x, y, 1, 1, withAlpha(MOON, (0.3f + 0.7f * hash01(i * 3)) * (0.4f + 0.6f * twinkle)));
-    }
-    for (int x = 0; x < CANVAS_WIDTH; x += 2) { // a faint ribbon of night light
-        float wave = std::sin(x * 0.012f + time * 0.15f) * 14.0f + std::sin(x * 0.031f) * 5.0f;
-        int y = 54 + (int)wave;
-        DrawRectangleGradientV(x, y, 2, 34, withAlpha(SPRING, 0.0f), withAlpha(SPRING, 0.05f));
-        DrawRectangleGradientV(x, y + 34, 2, 16, withAlpha(SPRING, 0.05f), withAlpha(WISTERIA, 0.0f));
-    }
-    DrawCircleGradient(116, 64, 110.0f, withAlpha(MOON, 0.14f), withAlpha(MOON, 0.0f));
-    DrawCircle(116, 64, 19.0f, MOON);
-    DrawCircle(110, 60, 4.0f, lerpColor(MOON, SKY_LOW, 0.25f));
-    DrawCircle(123, 70, 3.0f, lerpColor(MOON, SKY_LOW, 0.25f));
+float ledgeMist(const SceneView& view, const Node& node) {
+    if (view.mistById == nullptr || node.id < 0 || node.id > MAX_NODES_PER_REGION) return 0.0f;
+    return view.mistById[node.id];
 }
 
-void drawGardenHills() {
-    for (int x = 0; x < CANVAS_WIDTH; x++) { // rolling hills, stepped like pixel art
-        float y = 214.0f + std::sin(x * 0.011f + 1.3f) * 14.0f + std::sin(x * 0.027f) * 6.0f;
-        int top = (int)(std::floor(y / 2.0f) * 2.0f);
-        DrawRectangle(x, top, 1, CANVAS_HEIGHT - top, FAR_HILLS);
-    }
-    for (int i = 0; i < 14; i++) { // cypress trees
-        int x = 20 + i * 46 + (int)(hash01(i * 13 + 2) * 20.0f);
-        int height = 30 + (int)(hash01(i * 17 + 4) * 26.0f);
-        int base = 214 + (int)(std::sin(x * 0.011f + 1.3f) * 14.0f);
-        drawTriangleSafe(Vector2{(float)x - 5.0f, (float)base}, Vector2{(float)x + 5.0f, (float)base},
-                         Vector2{(float)x, (float)(base - height)}, FAR_HILLS);
-    }
-    // An overgrown observatory dome on the far right hill.
-    DrawCircleSector(Vector2{566.0f, 206.0f}, 18.0f, 180.0f, 360.0f, 20, FAR_HILLS);
-    DrawRectangle(548, 206, 36, 10, FAR_HILLS);
-    DrawRectangle(564, 190, 3, 16, lerpColor(FAR_HILLS, SKY_LOW, 0.5f)); // its open slit
-    DrawRectangle(556, 209, 2, 3, withAlpha(BLOSSOM, 0.6f));
-    DrawRectangleGradientV(0, 180, CANVAS_WIDTH, 90, withAlpha(MIST, 0.0f), withAlpha(MIST, 0.3f));
-    DrawRectangle(0, 270, CANVAS_WIDTH, CANVAS_HEIGHT - 270, withAlpha(MIST, 0.3f)); // no seam where the haze ends
+// The current brightens while it carries the traveler, and when the traveler stands at the hollow.
+float currentSurge(const SceneView& view) {
+    float surge = 0.35f;
+    if (view.current != nullptr && view.current->next == view.head) surge = 0.65f;
+    if (view.passage >= 0.0f) surge = 1.0f;
+    return surge;
 }
-
-// The landmark: an ancient tree in the middle of the garden, hung with glowing fruit.
-void drawAncientTree(float time) {
-    const float cx = 315.0f;
-    Color shadow = lerpColor(BARK, DARK, 0.5f);
-    for (int y = 60; y < CANVAS_HEIGHT; y++) {
-        float half = 16.0f + std::sin(y * 0.05f) * 2.0f;
-        if (y > 250) half += (y - 250) * 0.5f; // roots spread into the spring
-        int left = (int)(cx - half);
-        int right = (int)(cx + half);
-        DrawRectangle(left, y, right - left, 1, lerpColor(BARK, MID_GARDEN, 0.45f));
-        DrawRectangle(left, y, 3, 1, shadow);
-        DrawRectangle(right - 2, y, 2, 1, lerpColor(BARK_LIGHT, MID_GARDEN, 0.3f));
-    }
-    for (int g = 0; g < 3; g++) { // bark grooves
-        for (int y = 70; y < CANVAS_HEIGHT; y++) {
-            int wiggle = (int)std::round(std::sin(y * 0.07f + g * 2.0f) * 1.5f);
-            if (hash01(g * 991 + y) < 0.75f) DrawRectangle((int)cx - 8 + g * 8 + wiggle, y, 1, 1, shadow);
-        }
-    }
-    Color leaves = {44, 28, 84, 255};
-    Color leavesLit = {78, 56, 128, 255};
-    for (int i = 0; i < 16; i++) { // the canopy: clustered crowns, lit from the moon on the left, rustling
-        float x = 60.0f + i * 34.0f + std::floor(hash01(i * 7 + 1) * 18.0f) + std::round(std::sin(time * 0.6f + i * 1.3f) * (i % 2 == 0 ? 0.6f : 1.2f));
-        float y = 6.0f + std::floor(hash01(i * 11 + 2) * 50.0f + std::fabs(x - cx) * 0.12f);
-        float r = 26.0f + hash01(i * 13 + 3) * 16.0f;
-        DrawCircleV(Vector2{x - 2.0f, y - 2.0f}, r, leavesLit);
-        DrawCircleV(Vector2{x, y}, r, leaves);
-    }
-    for (int i = 0; i < 18; i++) { // glowing fruit lanterns hanging from the canopy
-        float x = 70.0f + hash01(i * 17 + 5) * 500.0f;
-        float y = 40.0f + hash01(i * 19 + 7) * 50.0f;
-        float swing = std::sin(time * 1.2f + i) * 1.5f;
-        Color glow = (i % 3 == 0) ? BLOSSOM : SPRING;
-        DrawLineEx(Vector2{x, y - 8.0f}, Vector2{x + swing, y}, 1.0f, leaves);
-        DrawCircleGradient((int)(x + swing), (int)y + 2, 7.0f, withAlpha(glow, 0.35f), withAlpha(glow, 0.0f));
-        DrawRectangle((int)(x + swing) - 1, (int)y, 2, 3, glow);
-    }
-}
-
-// The luminous spring at the tree's feet, below the route.
-void drawSpring(float time) {
-    DrawCircleGradient(315, SPRING_Y + 10, 170.0f, withAlpha(SPRING, 0.16f), withAlpha(SPRING, 0.0f));
-    DrawRectangleGradientV(150, SPRING_Y, 330, CANVAS_HEIGHT - SPRING_Y, withAlpha(SPRING, 0.42f), Color{20, 40, 70, 255});
-    DrawEllipse(150, SPRING_Y + 30, 22.0f, 30.0f, withAlpha(SPRING, 0.35f));
-    DrawEllipse(480, SPRING_Y + 30, 22.0f, 30.0f, withAlpha(SPRING, 0.35f));
-    DrawRectangle(150, SPRING_Y, 330, 1, withAlpha(WHITE, 0.6f));
-    for (int i = 0; i < 26; i++) { // shimmer on the surface, fading in and out so nothing jumps
-        float cycle = (hash01(i * 5 + 3) * 310.0f + time * (6.0f + i % 4)) / 310.0f;
-        float t = cycle - std::floor(cycle);
-        float x = 160.0f + t * 310.0f;
-        int y = SPRING_Y + 3 + (int)(hash01(i * 7 + 1) * 40.0f);
-        DrawRectangle((int)x, y, 3 + (int)(hash01(i * 11) * 8.0f), 1, withAlpha(WHITE, 0.25f * loopEnvelope(t)));
-    }
-    for (int i = 0; i < 6; i++) { // small lotus flowers floating
-        int x = 175 + i * 52 + (int)(hash01(i * 3 + 9) * 20.0f);
-        int y = SPRING_Y + 4 + (i % 2) * 6 + (int)std::round(std::sin(time * 1.3f + i) * 1.0f); // bobbing on the water
-        DrawRectangle(x - 2, y, 5, 1, MOSS);
-        DrawRectangle(x - 1, y - 1, 3, 1, BLOSSOM);
-        DrawRectangle(x, y - 2, 1, 1, PETAL);
-    }
-    for (int i = 0; i < 10; i++) { // light rising from the water
-        float t = std::fmod(time * (0.25f + 0.1f * hash01(i * 3 + 2)) + i * 0.1f, 1.0f);
-        int x = 170 + (int)(hash01(i * 13 + 4) * 290.0f);
-        DrawRectangle(x, SPRING_Y - (int)(t * 60.0f), 1, 1, withAlpha(SPRING, 0.7f * loopEnvelope(t)));
-    }
-}
-
-// Hedges, glowing flower bushes, and two stone lanterns around the spring.
-void drawGardenMiddle(float time) {
-    for (int i = 0; i < 9; i++) { // hedges and flower bushes along the back of the garden
-        int x = 10 + i * 74 + (int)(hash01(i * 7 + 3) * 20.0f);
-        int y = 288 + (int)(hash01(i * 11 + 1) * 10.0f);
-        float r = 16.0f + hash01(i * 13 + 5) * 10.0f;
-        DrawCircleV(Vector2{(float)x, (float)y}, r, MID_GARDEN);
-        DrawCircleV(Vector2{(float)x + r * 0.7f, (float)y + 4.0f}, r * 0.7f, MID_GARDEN);
-        for (int b = 0; b < 5; b++) {
-            float glow = 0.5f + 0.5f * std::sin(time * 1.6f + i + b);
-            Color color = ((i + b) % 2 == 0) ? BLOSSOM : SPRING;
-            DrawRectangle(x - (int)r / 2 + b * 6, y - (int)(r * 0.5f) + (b % 2) * 4, 2, 2, withAlpha(color, 0.35f + 0.4f * glow));
-        }
-    }
-    const int lanternX[2] = {168, 466};
-    for (int i = 0; i < 2; i++) { // stone garden lanterns
-        int x = lanternX[i];
-        int base = 298;
-        Color stone = lerpColor(STONE_DARK, MID_GARDEN, 0.3f);
-        DrawRectangle(x - 6, base - 4, 12, 4, stone);
-        DrawRectangle(x - 2, base - 16, 4, 12, stone);
-        DrawRectangle(x - 5, base - 24, 10, 8, stone);
-        float flicker = 0.85f + 0.15f * std::sin(time * 9.0f + i * 2.0f);
-        DrawCircleGradient(x, base - 20, 18.0f, withAlpha(WARM_LIGHT, 0.3f * flicker), withAlpha(WARM_LIGHT, 0.0f));
-        DrawRectangle(x - 3, base - 22, 6, 4, withAlpha(WARM_LIGHT, flicker));
-        drawTriangleSafe(Vector2{(float)x - 9.0f, (float)(base - 24)}, Vector2{(float)x + 9.0f, (float)(base - 24)},
-                         Vector2{(float)x, (float)(base - 31)}, stone);
-    }
-    DrawRectangleGradientV(0, 230, CANVAS_WIDTH, 70, withAlpha(MIST, 0.0f), withAlpha(MIST, 0.16f));
-    DrawRectangle(0, 300, CANVAS_WIDTH, CANVAS_HEIGHT - 300, withAlpha(MIST, 0.16f));
-}
-
-} // namespace
 
 // ---------------------------------------------------------------------------
 // Region 3 drawing
 // ---------------------------------------------------------------------------
 
-void drawGardenBackground(const SceneView& view) {
-    drawGardenSky(view.time);
-    drawGardenHills();
-    drawAncientTree(view.time);
-    drawSpring(view.time);
-    drawGardenMiddle(view.time);
-    RootPath path;
-    if (findRootPath(view, path)) drawGreatRoot(path, view); // drawn behind the platforms
+void drawGardenBackground(const SceneView& view, const RegionArt& art) {
+    const float time = view.time;
+    drawBackLayers(view, art, SKY_LAYER, HILLS_LAYER, 0.0f);
+    for (int i = 0; i < 30; i++) { // stars that twinkle
+        int x = (int)(hash01(i * 17 + 3) * CANVAS_WIDTH);
+        int y = 4 + (int)(hash01(i * 19 + 5) * 160.0f);
+        float twinkle = 0.5f + 0.5f * std::sin(time * (1.1f + hash01(i)) + i * 1.9f);
+        DrawRectangle(x, y, 1, 1, withAlpha(MOON, 0.2f + 0.65f * twinkle));
+    }
+    drawBackLayers(view, art, HILLS_LAYER, TREE_LAYER, 0.6f);
+    drawBackLayers(view, art, TREE_LAYER, LAYER_COUNT, 0.9f);
+
+    // Fruit lanterns hanging from the boughs, swinging gently.
+    for (int i = 0; i < 16; i++) {
+        float x = 70.0f + hash01(i * 17 + 5) * 500.0f;
+        float y = 52.0f + hash01(i * 19 + 7) * 44.0f;
+        float swing = std::sin(time * 1.2f + i) * 1.5f + windAt(x, time, 0.6f) * 1.2f;
+        Color glow = (i % 3 == 0) ? BLOSSOM : SPRING;
+        DrawLineEx(Vector2{x, y - 8.0f}, Vector2{x + swing, y}, 1.0f, TREE_LEAF[1]);
+        DrawRectangle((int)(x + swing) - 1, (int)y, 2, 3, glow);
+    }
+
+    // The spring under the root arch: bright water with light rising from it.
+    const float springLeft = TREE_X - 98.0f, springRight = TREE_X + 104.0f;
+    const float springMiddle = (springLeft + springRight) * 0.5f;
+    for (int y = SPRING_Y; y < CANVAS_HEIGHT; y++) { // a pool that fades out toward its banks
+        float depth = (y - SPRING_Y) / (float)(CANVAS_HEIGHT - SPRING_Y);
+        int half = (int)((springRight - springLeft) * 0.5f * (1.0f - 0.25f * depth));
+        Color water = lerpColor(lerpColor(SPRING, WHITE, 0.1f), Color{24, 46, 80, 255}, depth * 0.85f);
+        DrawRectangleGradientH((int)springMiddle - half, y, half, 1, withAlpha(water, 0.0f), withAlpha(water, 0.9f));
+        DrawRectangleGradientH((int)springMiddle, y, half, 1, withAlpha(water, 0.9f), withAlpha(water, 0.0f));
+    }
+    DrawRectangleGradientH((int)springLeft + 10, SPRING_Y, (int)(springMiddle - springLeft) - 10, 1, withAlpha(WHITE, 0.0f), withAlpha(WHITE, 0.7f));
+    DrawRectangleGradientH((int)springMiddle, SPRING_Y, (int)(springRight - springMiddle) - 10, 1, withAlpha(WHITE, 0.7f), withAlpha(WHITE, 0.0f));
+    for (int i = 0; i < 18; i++) { // shimmer on the surface, fading in and out
+        float cycle = (hash01(i * 5 + 3) + time * (0.02f + 0.01f * (i % 4)));
+        float t = cycle - std::floor(cycle);
+        float x = springLeft + 4.0f + t * (springRight - springLeft - 12.0f);
+        int y = SPRING_Y + 3 + (int)(hash01(i * 7 + 1) * 24.0f);
+        DrawRectangle((int)x, y, 3 + (int)(hash01(i * 11) * 7.0f), 1, withAlpha(WHITE, 0.3f * loopEnvelope(t)));
+    }
+    for (int i = 0; i < 5; i++) { // lotus flowers bobbing on the water
+        int x = (int)springLeft + 20 + i * 38 + (int)(hash01(i * 3 + 9) * 12.0f);
+        int y = SPRING_Y + 5 + (i % 2) * 6 + (int)std::round(std::sin(time * 1.3f + i) * 1.0f);
+        DrawRectangle(x - 2, y, 5, 1, MOSS[2]);
+        DrawRectangle(x - 1, y - 1, 3, 1, BLOSSOM);
+        DrawRectangle(x, y - 2, 1, 1, PETAL);
+    }
 }
 
-void drawGardenPlatforms(const SceneView& view) {
-    // The platform the current node's next points to. In a circular list next is never NULL,
-    // but it is still checked before use.
-    const Node* next = (view.current != nullptr) ? view.current->next : nullptr;
+void drawGardenPlatforms(const SceneView& view, const RegionArt& art) {
+    drawLedges(view, art, VEIL);
 
-    // Walk the real list from its head. In a circle the walk stops when it is back at the head.
+    Flow flow;
+    bool circle = returnFlow(view, flow);
+    if (circle) drawCurrent(flow, view.time, currentSurge(view));
+
+    const Node* next = (view.current != nullptr) ? view.current->next : nullptr; // never NULL in a circle, still checked
     const Node* node = view.head;
-    int steps = 0;
-    while (node != nullptr && steps < MAX_NODES_PER_REGION) {
+    for (int steps = 0; node != nullptr && steps < MAX_NODES_PER_REGION; steps++) {
         Ledge ledge = ledgeFor(*node, view.cameraX);
-        if (ledgeOnScreen(ledge)) {
-            float mist = 0.0f;
-            if (view.mistById != nullptr && node->id >= 0 && node->id <= MAX_NODES_PER_REGION) {
-                mist = view.mistById[node->id];
-            }
-            GardenShape shape = shapeFor(*node);
-            Silhouette outline = buildGardenSilhouette(shape, ledge);
-            fillSilhouette(outline, (shape == GardenShape::RootKnot) ? ROOT_BARK : GARDEN_STONE, false);
-            drawGardenDetails(shape, ledge, outline, view.time);
-            drawMistVeil(outline, mist, VEIL);
-            // The tail's next is the head; that link is shown by the root, so no glow at the head.
-            if (node == next && node != view.head) drawNextGlow(ledge, view.time, arrivalEase(view));
+        float mist = ledgeMist(view, *node);
+        if (node->id == 1 || node->id == 4) {
+            drawGrass(ledge, view, lerpColor(MOSS[4], VEIL, mist * 0.7f), lerpColor(MOSS[2], VEIL, mist * 0.7f), 0.6f, 0.35f);
         }
+        if (node->id == 3) { // flowers in the bed, nodding in the breeze
+            for (int i = 0; i < 9; i++) {
+                int x = ledge.left + 28 + i * (ledge.width - 56) / 8;
+                int lean = (int)std::lround(windAt((float)x, view.time, 0.6f) * 1.5f);
+                Color bloom = lerpColor((i % 3 == 0) ? WISTERIA : ((i % 2 == 0) ? BLOSSOM : PETAL), VEIL, mist * 0.7f);
+                DrawRectangle(x, ledge.top - 2, 1, 2, lerpColor(MOSS[2], VEIL, mist * 0.7f));
+                DrawRectangle(x + lean, ledge.top - 3, 1, 1, bloom);
+            }
+        }
+        // The tail's next is the head: that link is the current, so the head gets no lip.
+        if (node == next && node != view.head) drawLinkLip(ledge, WARM_LIGHT, arrivalEase(view), view.time, true);
         node = node->next;
-        steps++;
         if (node == view.head) break; // stop condition: back at the start
     }
 
@@ -578,13 +732,28 @@ void drawGardenPlatforms(const SceneView& view) {
     drawRootHollow(view.portalRect, view, onTail);
     if (view.hasGate) drawMoonGate(view.gateRect, view.cameraX, view.gateProgress, view.time);
 
-    RootPath path;
-    if (view.passage >= 0.0f && findRootPath(view, path)) drawPassageMote(path, view.passage, view.time);
+    if (view.passage >= 0.0f && circle) { // the traveler, as a mote of light, carried by the current
+        Vector2 p = flowPoint(flow, std::fmin(1.0f, view.passage / 0.92f));
+        if (view.passage > 0.92f) { // the last hop up onto the head
+            const Node* head = view.head;
+            Vector2 top = {(float)toCanvasX(head->platformPosition.x + head->platformWidth / 2.0f, view.cameraX),
+                           (float)toCanvasY(head->platformPosition.y) - 6.0f};
+            float k = (view.passage - 0.92f) / 0.08f;
+            p = Vector2{p.x + (top.x - p.x) * k, p.y + (top.y - p.y) * k - std::sin(k * 3.14159f) * 12.0f};
+        }
+        DrawRectangle((int)p.x - 1, (int)p.y - 1, 3, 3, WHITE);
+        for (int k = 1; k <= 7; k++) { // a trail of petals
+            float behind = std::fmin(1.0f, view.passage / 0.92f) - k * 0.02f;
+            if (behind < 0.0f) break;
+            Vector2 b = flowPoint(flow, behind);
+            DrawRectangle((int)b.x + (int)(std::sin(view.time * 8.0f + k) * 2.0f), (int)b.y + k / 2, 2, 1, withAlpha(PETAL, 1.0f - k / 8.0f));
+        }
+    }
 }
 
-void drawGardenForeground(const SceneView& view) {
+void drawGardenForeground(const SceneView& view, const RegionArt& art) {
     const float time = view.time;
-    for (int i = 0; i < 26; i++) { // petals drifting down through the garden, turning as they fall
+    for (int i = 0; i < 24; i++) { // petals drifting down through the garden, turning as they fall
         float t = std::fmod(time * 0.06f + hash01(i * 7 + 1), 1.0f);
         float x = std::fmod(hash01(i * 13 + 2) * 700.0f + t * 120.0f, 700.0f) - 30.0f + std::sin(time + i) * 8.0f;
         float y = t * 380.0f - 10.0f;
@@ -595,28 +764,103 @@ void drawGardenForeground(const SceneView& view) {
         float x = hash01(i * 5 + 9) * CANVAS_WIDTH + std::sin(time * 0.6f + i * 1.4f) * 12.0f;
         float y = 120.0f + hash01(i * 3 + 4) * 160.0f + std::sin(time * 0.8f + i) * 8.0f;
         float twinkle = 0.5f + 0.5f * std::sin(time * 2.4f + i * 2.0f);
-        DrawCircleGradient((int)x, (int)y, 5.0f, withAlpha(SPRING, 0.3f * twinkle), withAlpha(SPRING, 0.0f));
         DrawRectangle((int)x, (int)y, 1, 1, withAlpha(SPRING, 0.4f + 0.6f * twinkle));
     }
-    for (int i = 0; i < 9; i++) { // wisteria hanging along the top edge
-        int x = 8 + i * 76 + (int)(hash01(i * 3 + 1) * 20.0f);
-        int length = 18 + (int)(hash01(i * 9 + 2) * 26.0f);
-        for (int k = 0; k < length; k++) {
-            int sway = (int)std::round(std::sin(time * 1.1f + i + k * 0.1f) * (k / (float)length) * 3.0f);
-            int width = 5 - k * 4 / length;
-            DrawRectangle(x - width / 2 + sway, k, width, 1, (k % 4 == 0) ? WISTERIA : lerpColor(WISTERIA, DARK, 0.45f));
-        }
-    }
-    for (int i = 0; i < 18; i++) { // dark ferns along the bottom
-        float x = i * 38.0f + hash01(i * 5 + 1) * 14.0f;
-        for (int b = 0; b < 4; b++) {
-            float height = 12.0f + hash01(i * 11 + b) * 22.0f;
-            float lean = (b - 1.5f) * 5.0f + std::sin(time * 1.3f + i + b) * 1.2f;
-            drawTriangleSafe(Vector2{x + b * 4.0f - 2.0f, CANVAS_HEIGHT + 2.0f}, Vector2{x + b * 4.0f + 2.0f, CANVAS_HEIGHT + 2.0f},
-                             Vector2{x + b * 4.0f + lean, CANVAS_HEIGHT - height}, DARK);
-        }
-    }
-    DrawRectangleGradientH(0, 0, 70, CANVAS_HEIGHT, withAlpha(DARK, 0.5f), withAlpha(DARK, 0.0f));
-    DrawRectangleGradientH(CANVAS_WIDTH - 70, 0, 70, CANVAS_HEIGHT, withAlpha(DARK, 0.0f), withAlpha(DARK, 0.5f));
-    DrawRectangleGradientV(0, 0, CANVAS_WIDTH, 40, withAlpha(DARK, 0.5f), withAlpha(DARK, 0.0f));
+    drawFrontLayers(view, art, 0.8f);
+    DrawRectangleGradientH(0, 0, 60, CANVAS_HEIGHT, withAlpha(DARK, 0.45f), withAlpha(DARK, 0.0f));
+    DrawRectangleGradientH(CANVAS_WIDTH - 60, 0, 60, CANVAS_HEIGHT, withAlpha(DARK, 0.0f), withAlpha(DARK, 0.45f));
 }
+
+void drawGardenAdditive(const SceneView& view, const RegionArt&, const SceneRenderer& renderer) {
+    const float time = view.time;
+    renderer.drawSoftLight(Vector2{MOON_X, MOON_Y}, 130.0f, MOON, 0.16f);
+    renderer.drawSoftLight(Vector2{MOON_X, MOON_Y}, 46.0f, MOON, 0.28f);
+    for (int x = 0; x < CANVAS_WIDTH; x += 2) { // a faint ribbon of night light across the sky
+        float wave = std::sin(x * 0.012f + time * 0.15f) * 14.0f + std::sin(x * 0.031f) * 5.0f;
+        int y = 50 + (int)wave;
+        DrawRectangleGradientV(x, y, 2, 30, withAlpha(SPRING, 0.0f), withAlpha(SPRING, 0.04f));
+        DrawRectangleGradientV(x, y + 30, 2, 16, withAlpha(SPRING, 0.04f), withAlpha(WISTERIA, 0.0f));
+    }
+    for (int i = 0; i < 16; i++) { // the fruit lanterns' glow
+        float x = 70.0f + hash01(i * 17 + 5) * 500.0f + std::sin(time * 1.2f + i) * 1.5f;
+        float y = 54.0f + hash01(i * 19 + 7) * 44.0f;
+        renderer.drawSoftLight(Vector2{x, y}, 7.0f, (i % 3 == 0) ? BLOSSOM : SPRING, 0.35f);
+    }
+    for (int i = 0; i < 16; i++) { // the fireflies' glow
+        float x = hash01(i * 5 + 9) * CANVAS_WIDTH + std::sin(time * 0.6f + i * 1.4f) * 12.0f;
+        float y = 120.0f + hash01(i * 3 + 4) * 160.0f + std::sin(time * 0.8f + i) * 8.0f;
+        float twinkle = 0.5f + 0.5f * std::sin(time * 2.4f + i * 2.0f);
+        renderer.drawSoftLight(Vector2{x + 0.5f, y + 0.5f}, 6.0f, SPRING, 0.35f * twinkle);
+    }
+}
+
+void addGardenLights(const SceneView& view, const RegionArt&, std::vector<Light>& lights) {
+    const float time = view.time;
+    lights.push_back(Light{Vector2{TREE_X, (float)SPRING_Y + 10.0f}, 150.0f, SPRING, 0.42f + 0.05f * std::sin(time * 1.3f), 60.0f, 0.18f});
+    Flow flow;
+    if (returnFlow(view, flow)) { // light along the current, swelling as waves pass
+        float surge = currentSurge(view);
+        for (int i = 1; i < 7; i++) {
+            float t = i / 7.0f;
+            float wave = 0.6f + 0.4f * std::sin(t * 46.0f - time * 5.0f);
+            lights.push_back(Light{flowPoint(flow, t), 46.0f, SPRING, 0.3f * surge * wave, 10.0f, 0.12f * surge});
+        }
+        if (view.passage >= 0.0f) {
+            Vector2 p = flowPoint(flow, std::fmin(1.0f, view.passage / 0.92f));
+            lights.push_back(Light{p, 60.0f, Color{220, 255, 245, 255}, 0.6f, 14.0f, 0.7f});
+        }
+    }
+    const Node* next = (view.current != nullptr) ? view.current->next : nullptr;
+    const Node* node = view.head;
+    for (int steps = 0; node != nullptr && steps < MAX_NODES_PER_REGION; steps++) {
+        Ledge ledge = ledgeFor(*node, view.cameraX);
+        if (node == next && node != view.head) addLinkLight(lights, ledge, WARM_LIGHT, arrivalEase(view));
+        if (node->id == 2) { // the moon-cap glows from its pale spots
+            float pulse = 0.5f + 0.5f * std::sin(time * 1.8f);
+            lights.push_back(Light{Vector2{ledge.left + ledge.width * 0.5f, ledge.top + 3.0f}, 40.0f, SPRING, 0.22f + 0.1f * pulse, 16.0f, 0.12f + 0.08f * pulse});
+        }
+        if (node->id == 4) {
+            bool onTail = view.current == node;
+            float glow = onTail ? 0.55f : 0.25f;
+            Vector2 hollow = {(float)toCanvasX(view.portalRect.x + view.portalRect.width / 2.0f, view.cameraX),
+                              (float)toCanvasY(view.portalRect.y + view.portalRect.height / 2.0f)};
+            lights.push_back(Light{hollow, 42.0f, SPRING, glow, 12.0f, glow * 0.6f});
+        }
+        node = node->next;
+        if (node == view.head) break;
+    }
+    const int lanternX[2] = {168, 470};
+    for (int i = 0; i < 2; i++) {
+        float flicker = 0.85f + 0.15f * std::sin(time * 9.0f + i * 2.0f);
+        lights.push_back(Light{Vector2{(float)lanternX[i], 278.0f}, 34.0f, WARM_LIGHT, 0.4f * flicker, 7.0f, 0.4f * flicker});
+    }
+    if (view.checkpoint != nullptr) {
+        Ledge ledge = ledgeFor(*view.checkpoint, view.cameraX);
+        addLanternLight(lights, ledge.left + ledge.width - 14, ledge.top, view.checkpointFlash, time);
+    }
+    if (view.hasGate && view.gateProgress > 0.0f) {
+        float light = smooth01(view.gateProgress);
+        float x = (float)toCanvasX(view.gateRect.x + view.gateRect.width / 2.0f, view.cameraX);
+        float y = (float)toCanvasY(view.gateRect.y + view.gateRect.height) - 19.0f;
+        lights.push_back(Light{Vector2{x, y}, 70.0f * light, SPRING, 0.55f * light, 22.0f * light, 0.5f * light});
+    }
+}
+
+Mood gardenMood(const SceneView&) {
+    Mood mood;
+    mood.skyLight = WHITE;
+    mood.groundLight = Color{136, 120, 176, 255};
+    mood.lightFrom = 90;
+    mood.lightTo = 300;
+    mood.shadowTint = Vector3{0.92f, 0.86f, 1.1f};
+    mood.highlightTint = Vector3{1.04f, 0.99f, 1.06f};
+    mood.saturation = 1.08f;
+    mood.bloom = 0.85f;
+    mood.vignette = 0.42f;
+    return mood;
+}
+
+} // namespace
+
+const RegionPainter GARDEN_PAINTER = {bakeGarden, drawGardenBackground, drawGardenPlatforms, nullptr,
+                                      drawGardenForeground, drawGardenAdditive, addGardenLights, gardenMood};
