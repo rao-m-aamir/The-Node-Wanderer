@@ -302,12 +302,15 @@ void Game::drawJournalHint() const {
     if (inspectorOpen) {
         return; // the journal itself is open there
     }
+    const bool muted = audio.settings().muted;
     float width = 24.0f + measureKeyHint("TAB", "journal") + 16.0f + measureKeyHint("ESC", "pause");
+    if (muted) width += 16.0f + measureKeyHint("M", "sound off");
     Rectangle card = {SCREEN_WIDTH - 12.0f - width, 10.0f, width, 26.0f};
     DrawRectangleRounded(card, 0.4f, 6, Fade(UI_NAVY, 0.7f));
     float x = card.x + 12.0f;
     x += drawKeyHint("TAB", "journal", x, card.y + 6.0f, UI_TEXT, OUTLINE_DARK, UI_DIM_TEXT) + 16.0f;
-    drawKeyHint("ESC", "pause", x, card.y + 6.0f, UI_TEXT, OUTLINE_DARK, UI_DIM_TEXT);
+    x += drawKeyHint("ESC", "pause", x, card.y + 6.0f, UI_TEXT, OUTLINE_DARK, UI_DIM_TEXT) + 16.0f;
+    if (muted) drawKeyHint("M", "sound off", x, card.y + 6.0f, NULL_AMBER, OUTLINE_DARK, NULL_AMBER);
 }
 
 // A short line about what just happened, under the objective (exploring voice).
@@ -632,23 +635,27 @@ void Game::drawMessageBox() const {
     drawKeyHint("E / ENTER", action, card.x + card.width - hintWidth - 20.0f, footerY, INK, PARCHMENT, INK_SOFT);
 }
 
-// The journal's leather cover, closed while the game is paused, with the controls inside it.
+// The journal's leather cover, closed while the game is paused: the controls on the left, and the
+// sound on the right (up and down choose a row, left and right change it).
 void Game::drawPauseScreen() const {
     DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, Fade(BLACK, 0.55f));
-    Rectangle cover = {SCREEN_WIDTH / 2.0f - 260.0f, 170.0f, 520.0f, 370.0f};
-    DrawRectangleRounded(Rectangle{cover.x + 5.0f, cover.y + 6.0f, cover.width, cover.height}, 0.06f, 6, Fade(BLACK, 0.4f));
-    DrawRectangleRounded(cover, 0.06f, 6, LEATHER);
-    DrawRectangleRoundedLinesEx(Rectangle{cover.x + 10.0f, cover.y + 10.0f, cover.width - 20.0f, cover.height - 20.0f}, 0.06f,
+    Rectangle cover = {SCREEN_WIDTH / 2.0f - 400.0f, 150.0f, 800.0f, 410.0f};
+    DrawRectangleRounded(Rectangle{cover.x + 5.0f, cover.y + 6.0f, cover.width, cover.height}, 0.05f, 6, Fade(BLACK, 0.4f));
+    DrawRectangleRounded(cover, 0.05f, 6, LEATHER);
+    DrawRectangleRoundedLinesEx(Rectangle{cover.x + 10.0f, cover.y + 10.0f, cover.width - 20.0f, cover.height - 20.0f}, 0.05f,
                                 6, 2.0f, GILT);
     DrawRectangle((int)cover.x + 28, (int)cover.y, 12, (int)cover.height, LEATHER_DARK); // the spine strap
 
-    const float center = SCREEN_WIDTH / 2.0f + 14.0f; // a little right of the strap
+    const float center = cover.x + cover.width / 2.0f + 14.0f; // a little right of the strap
     const char* title = "PAUSED";
-    DrawText(title, (int)center - MeasureText(title, 40) / 2, (int)cover.y + 36, 40, GILT);
+    DrawText(title, (int)center - MeasureText(title, 40) / 2, (int)cover.y + 32, 40, GILT);
     const char* subtitle = TextFormat("Region %d - %s", regionIndex + 1, world.getRegion(regionIndex).placeName);
-    DrawText(subtitle, (int)center - MeasureText(subtitle, 20) / 2, (int)cover.y + 86, 20, PARCHMENT);
-    DrawRectangle((int)center - 150, (int)cover.y + 122, 300, 1, Fade(GILT, 0.6f));
+    DrawText(subtitle, (int)center - MeasureText(subtitle, 20) / 2, (int)cover.y + 80, 20, PARCHMENT);
+    DrawRectangle((int)center - 330, (int)cover.y + 114, 660, 1, Fade(GILT, 0.6f));
 
+    // Left page: the controls.
+    const float leftX = cover.x + 70.0f;
+    DrawText("CONTROLS", (int)leftX, (int)cover.y + 132, 10, GILT);
     struct Row { const char* key; const char* action; };
     const Row rows[] = {
         {"A / D  or  LEFT / RIGHT", "walk"},
@@ -656,15 +663,59 @@ void Game::drawPauseScreen() const {
         {"E  or  ENTER", "interact, turn a note's page"},
         {"TAB", "open or close the field journal"},
         {"ESC", "pause and resume"},
+        {"M", "sound off or on"},
     };
-    float rowY = cover.y + 140.0f;
-    for (const Row& row : rows) { // key caps right-aligned to the middle, actions to the right of it
+    float rowY = cover.y + 154.0f;
+    const float keysRight = leftX + 150.0f;
+    for (const Row& row : rows) { // key caps right-aligned, actions beside them
         float capWidth = MeasureText(row.key, 10) + 12.0f;
-        float capX = center - 16.0f - capWidth;
+        float capX = keysRight - capWidth;
         DrawRectangleRounded(Rectangle{capX, rowY, capWidth, 16.0f}, 0.3f, 4, PARCHMENT);
         DrawText(row.key, (int)(capX + 6.0f), (int)rowY + 3, 10, LEATHER_DARK);
-        DrawText(row.action, (int)center, (int)rowY + 3, 10, PARCHMENT);
+        DrawText(row.action, (int)(keysRight + 12.0f), (int)rowY + 3, 10, PARCHMENT);
         rowY += 28.0f;
+    }
+
+    // Right page: the sound.
+    const float rightX = cover.x + 470.0f;
+    DrawRectangle((int)rightX - 34, (int)cover.y + 132, 1, 176, Fade(GILT, 0.35f));
+    DrawText("SOUND", (int)rightX, (int)cover.y + 132, 10, GILT);
+    const AudioSettings& s = audio.settings();
+    const char* labels[3] = {"Music", "Sounds", "Mute"};
+    const float values[2] = {s.music, s.sounds};
+    for (int i = 0; i < 3; i++) {
+        float y = cover.y + 158.0f + i * 40.0f;
+        bool selected = audioRow == i;
+        if (selected) { // a gilt marker and a soft band on the chosen row
+            DrawRectangleRounded(Rectangle{rightX - 14.0f, y - 7.0f, 300.0f, 30.0f}, 0.4f, 6, Fade(GILT, 0.14f));
+            DrawPoly(Vector2{rightX - 6.0f, y + 8.0f}, 4, 5.0f, 0.0f, GILT);
+        }
+        Color labelColor = selected ? GILT : PARCHMENT;
+        DrawText(labels[i], (int)rightX + 6, (int)y, 20, labelColor);
+        if (i < 2) {
+            const float barX = rightX + 96.0f;
+            const int notches = 10;
+            int filled = (int)std::round(values[i] * notches);
+            for (int n = 0; n < notches; n++) { // ten notches, filled up to the level
+                Rectangle notch = {barX + n * 15.0f, y + 3.0f, 11.0f, 14.0f};
+                if (n < filled) {
+                    DrawRectangleRec(notch, Fade(s.muted ? PARCHMENT_SHADE : PARCHMENT, s.muted ? 0.5f : 1.0f));
+                } else {
+                    DrawRectangleLinesEx(notch, 1.0f, Fade(PARCHMENT, 0.45f));
+                }
+            }
+            const char* percent = TextFormat("%d%%", (int)std::round(values[i] * 100.0f));
+            Color percentColor = (selected && audioRowFlash > 0.0f) ? GILT : PARCHMENT;
+            DrawText(percent, (int)(barX + notches * 15.0f + 10.0f), (int)y, 20, percentColor);
+        } else {
+            const char* muteText = s.muted ? "on: no sound" : "off";
+            DrawText(muteText, (int)rightX + 96, (int)y, 20, s.muted ? NULL_AMBER : PARCHMENT);
+        }
+    }
+    DrawText("W / S  or  UP / DOWN:  choose a row", (int)rightX - 6, (int)cover.y + 280, 10, Fade(PARCHMENT, 0.7f));
+    DrawText("A / D  or  LEFT / RIGHT:  change it", (int)rightX - 6, (int)cover.y + 296, 10, Fade(PARCHMENT, 0.7f));
+    if (!audio.isReady()) { // no audio device, or no assets/audio folder: say so instead of failing quietly
+        DrawText("Sound is unavailable on this computer.", (int)rightX - 6, (int)cover.y + 316, 10, NULL_AMBER);
     }
 
     float total = measureKeyHint("ESC", "resume") + 30.0f + measureKeyHint("Q", "quit");
@@ -672,7 +723,6 @@ void Game::drawPauseScreen() const {
     x += drawKeyHint("ESC", "resume", x, cover.y + cover.height - 50.0f, GILT, LEATHER_DARK, GILT) + 30.0f;
     drawKeyHint("Q", "quit", x, cover.y + cover.height - 50.0f, GILT, LEATHER_DARK, GILT);
 }
-
 // The journal opened to its last spread: what each place taught.
 void Game::drawCompleteScreen() const {
     DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, Fade(BLACK, 0.6f));
@@ -704,6 +754,10 @@ void Game::drawCompleteScreen() const {
     DrawText(journey, (int)middle - MeasureText(journey, 20) / 2, (int)left.y + 352, 20, INK);
     const char* closing = "Every link followed, and every gap mended.";
     DrawText(closing, (int)middle - MeasureText(closing, 10) / 2, (int)left.y + 386, 10, INK_SOFT);
+    const char* music = "Music by Scott Buckley (scottbuckley.com.au), CC BY 4.0.";
+    const char* sounds = "Sounds: Freesound, Kenney, and Versilian Studios, CC0. See assets/audio/CREDITS.md.";
+    DrawText(music, (int)middle - MeasureText(music, 10) / 2, (int)left.y + 456, 10, INK_SOFT);
+    DrawText(sounds, (int)middle - MeasureText(sounds, 10) / 2, (int)left.y + 472, 10, INK_SOFT);
 
     struct Entry { const char* line1; const char* line2; };
     const Entry entries[REGION_COUNT] = {
@@ -740,7 +794,12 @@ void Game::showMessage(std::vector<std::string> newPages, NoteKind kind) {
     pageKinds.assign(pages.size(), kind);
     pageIndex = 0;
     state = pages.empty() ? GameState::Playing : GameState::Message;
-    if (!pages.empty()) stopPlayerPose();
+    if (!pages.empty()) {
+        stopPlayerPose();
+        // A welcome note is pinned up with a paper sound once it can be seen. Other notes arrive
+        // with their own sound (a recovery, an exit opening), so they add none.
+        notePending = kind == NoteKind::Intro;
+    }
 }
 
 void Game::showToast(const std::string& text, float seconds) {
@@ -756,6 +815,7 @@ void Game::showCallout(Callout which) {
     calloutSeen[index] = true;
     calloutShown = which;
     calloutTimer = CALLOUT_SECONDS;
+    audio.play(Sfx::Callout, 1.0f, 1.0f, 0.6f, 0.4f); // a slip of paper, from the journal's side of the screen
 }
 
 // What to do next, in the exploring voice (the journal has the details).

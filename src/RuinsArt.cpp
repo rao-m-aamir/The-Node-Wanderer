@@ -442,6 +442,11 @@ void bakeRuins(RegionArt& art, const World& world) {
         midMask.rect(rightX, rightTop, PILLAR, WATERLINE - rightTop + 2);
         midMask.rect(leftX - 2, a.springY - 4, PILLAR + 4, 4); // capitals
         if (!a.broken) midMask.rect(rightX - 2, a.springY - 4, PILLAR + 4, 4);
+        if (a.broken) { // a brazier on the broken pillar; its fire is drawn live (drawRuinsBackground)
+            int bx = (int)a.x + a.radius;
+            midMask.rect(bx - 4, rightTop - 4, 8, 2);
+            midMask.rect(bx - 1, rightTop - 2, 2, 2);
+        }
         float outer = (float)(a.radius + PILLAR / 2), inner = (float)(a.radius - PILLAR / 2);
         for (int y = a.springY - (int)outer; y < a.springY; y++) {
             for (int x = (int)(a.x - outer); x <= (int)(a.x + outer); x++) {
@@ -712,7 +717,7 @@ void drawRuinsBackground(const SceneView& view, const RegionArt& art) {
         Arch a = archAt(i);
         if (!a.broken) continue;
         float bx = layerToScreen(a.x + a.radius, view.scroll, PARALLAX[MID_LAYER]);
-        int top = a.springY + 34 - 4;
+        int top = a.springY + 34 - 4; // the rim of the brazier baked on the broken pillar
         for (int f = 0; f < 3; f++) {
             int height = 2 + (int)((0.5f + 0.5f * std::sin(time * (8.0f + f * 2.9f) + i + f * 1.7f)) * 4.0f);
             DrawRectangle((int)bx - 3 + f * 2, top - height, 2, height, (f == 1) ? FIRE_HOT : FIRE);

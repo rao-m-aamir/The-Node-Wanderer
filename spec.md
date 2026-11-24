@@ -2,7 +2,7 @@
 
 ## Project summary
 
-Build a small, playable 2D side-scrolling fantasy platformer in C++ with Raylib. A traveler with a hat, a red scarf, a backpack, and a lantern crosses four places: a deep forest, flooded ruins, a night garden, and the cliffs at the edge of the world. Underneath the adventure, every place is a linked list: the ledges the traveler stands on are the list's nodes, the ways between them are its links, and a field journal reads those same nodes.
+Build a small, playable 2D side-scrolling fantasy platformer in C++ with Raylib, with its own music and sound. A traveler with a hat, a red scarf, a backpack, and a lantern crosses four places: a deep forest, flooded ruins, a night garden, and the cliffs at the edge of the world. Underneath the adventure, every place is a linked list: the ledges the traveler stands on are the list's nodes, the ways between them are its links, and a field journal reads those same nodes.
 
 The game should feel inviting and alive first. The data structures are taught through what the player does and sees, and explained in detail in the field journal.
 
@@ -13,7 +13,7 @@ Keep the implementation beginner-readable, with explicit pointer changes and cle
 - Make singly, doubly, and circular singly linked lists tangible and explorable.
 - Use actual list links to determine valid platform traversal and journal output.
 - Teach safe handling of a null pointer through a recoverable hazard and explicit checks.
-- Give the tutorial the look and feel of a finished fantasy platformer: layered, lit, animated scenes, a memorable traveler, and a route that flows through each place.
+- Give the tutorial the look, sound, and feel of a finished fantasy platformer: layered, lit, animated scenes, a memorable traveler, a route that flows through each place, and a gentle score and soundscape for each place.
 - Deliver a complete tutorial stage without requiring an elaborate engine.
 
 ## Scope and non-goals
@@ -24,6 +24,7 @@ Keep the implementation beginner-readable, with explicit pointer changes and cle
 - A traveler who walks, jumps, falls, lands, and recovers, with expressive animation.
 - Original visual assets and a complete art pass across all four regions: layered scenery, platforms that belong to their environment, lighting, reflections, particles, and animation. Assets may be painted by code at load time, drawn as pixel sprites in code, or added as image files.
 - Region introductions, short teaching moments, objectives, transitions, and an ending.
+- Music, ambience, and sound effects for the whole journey, from verified open-license sources (or original cues), with music and sound volume controls and a mute option.
 - A field journal that shows values and links from the active region's actual list.
 - Region setup and deterministic cleanup of dynamically allocated nodes.
 - Keyboard input.
@@ -33,7 +34,8 @@ Keep the implementation beginner-readable, with explicit pointer changes and cle
 - Multiple stages, save files, accounts, networking, or a level editor.
 - A general-purpose physics engine, game framework, or complex rendering framework.
 - Arbitrary list editing by the player, templates, smart-pointer frameworks, or complex inheritance.
-- Audio, controller support, or extensive settings menus.
+- Controller support, extensive settings menus, or saved settings.
+- Voice acting, an audio middleware engine, or a dynamic music system beyond crossfades between loops.
 - A separate visual-only graph or list used in place of backend nodes.
 
 ## Finalized design decisions
@@ -62,7 +64,7 @@ Keep the implementation beginner-readable, with explicit pointer changes and cle
 - **Replay:** clears the non-owning pointers, clears all lists, and rebuilds the stage.
 - **Escape:** `SetExitKey(KEY_NULL)` makes Escape pause the game. Q quits.
 - **Memory check:** a live-node counter, `g_liveNodeCount`, is printed to the console at shutdown and must be 0. It is a developer diagnostic and is not shown on the player's completion screen.
-- **Build:** CMake with `FetchContent` for Raylib 5.5, C++17. The project lives in the workspace root, not a `node-wanderer/` subfolder. Raylib is a static library and the MSVC runtime is linked statically (`/MT`), so the Release build is one self-contained exe that only uses Windows system DLLs. All art and shaders are built into the executable.
+- **Build:** CMake with `FetchContent` for Raylib 5.5, C++17. The project lives in the workspace root, not a `node-wanderer/` subfolder. Raylib is a static library and the MSVC runtime is linked statically (`/MT`), so the exe only uses Windows system DLLs. All art and shaders are built into the executable. The music and sounds are files in `assets/audio`: the build copies the folder beside the exe, and `cmake --install build --prefix dist --component game` makes a folder to share (the exe and `assets/audio`). The game finds the folder beside the exe or in the working folder; without it, or without an audio device, the game runs silently and says so in the console.
 - **Input:** the keyboard is read once per frame into an `InputFrame` (`Input.h`), which gameplay receives as plain values.
 
 ## Art direction
@@ -74,7 +76,7 @@ The game is "lantern-lit storybook pixel art": crisp pixels on a 640x360 canvas 
 - Each region's scenery and platforms are painted pixel by pixel when the region loads (`Paint.cpp` and the four region art files) and kept as textures. Moving parts (water, fire, foliage in the wind, the bridge, gates, particles) are drawn live each frame.
 - The traveler and small props are pixel sprites written in code.
 - Lighting: a light map darkens the scene away from light sources and lights from above, every light source also glows, and a final pass adds gentle bloom, a per-region color grade, and a vignette. The shaders are embedded in the source; if they fail to load, the game still runs without the final pass.
-- All art is original and made for this project, so there are no third-party licenses. Any external asset added later must be listed with its source and license in `ASSETS.md`.
+- All art is original and made for this project. The audio comes from open-license sources (CC0 and CC BY 4.0), and every file's sources, licenses, attribution, and edits are listed in `assets/audio/CREDITS.md`, with copies of the licenses in `assets/audio/licenses/`. Any external asset added later must be recorded the same way.
 
 ### Shared language
 
@@ -96,6 +98,32 @@ The game is "lantern-lit storybook pixel art": crisp pixels on a 640x360 canvas 
 
 - Small, warm overlays that never cover the traveler or the route: the place and objective at the top left, a journal hint at the top right, and controls at the start of the journey and on the pause screen.
 - Reading happens in an explorer's field journal: the journal itself, notes, the pause cover, and the ending.
+
+## Sound
+
+The sound is a warm, gentle extension of the traveler and the places: it supports exploration, makes important moments satisfying, and leaves room for the notes and the journal.
+
+### Music and ambience
+
+- **One score:** related pieces by one composer (piano, strings, and soft synth pads), each cut into a seamless loop. The forest is warm and sparse, the ruins spacious and reflective, the garden luminous and dreamlike, and the edge restrained and expectant. Mending the bridge brings a hopeful dawn piece, and the journey's end has its own.
+- **Ambience for each place:** soft forest air, birds, and leaves; drips, still water, and faint firelight in the flooded halls; night insects in the garden; wind across the cliffs, with the deep draft of the ravine growing near the broken bridge, then a calmer morning wood after the repair. Beds sit well under the music and loop without seams.
+- **Transitions:** the old music and ambience fade with the screen, and the new place's music and ambience fade in during the dark beat that names it, with a short motif in the place's key. Nothing cuts off abruptly.
+- **Under notes and menus:** the music dips a little under journal notes and the open journal, and further on the pause screen, then returns.
+
+### Effects
+
+- **The traveler:** footsteps that follow the walking rhythm, with a sound for each surface (grass, earth, stone, wet stone, wood, a soft mushroom cap) and slight variation in pitch and level; a rustle on jumping; landing on the surface, with a thud after a real drop; a rush of air on a long fall; a splash into water.
+- **Links:** each link followed plays a note in the key of the place's music, rising along `next`; in Region 2 a cooler note falls back along `previous`; in Region 3 the current home through the tail's `next` ends on a full chord.
+- **The world:** taking the key's light, the brazier catching, checkpoint lanterns, gates opening (one chord for each place), walking through an exit, recovering from a fall, the edge's gust, and the journey's end.
+- **Region 4:** the gap is tense but never startling (a low swell from the depth, with no hard attack); the repair swells, planks land one after another as the bridge is drawn, the pier rises, the rope rails tighten, lanterns light in turn on notes of the dawn's key, and the wind drops.
+- **The journal and interface:** opening and closing the journal, turning a note's page, dismissing a note, the first-time callouts, the pause cover, and the volume controls each have a quiet paper, leather, or tick sound.
+- Each one-shot plays once when its event happens, never while a state stays true. Repeated sounds vary, and a few sounds of each place (drips, chimes, creaks, pebbles) play at random intervals.
+
+### Mix
+
+- Levels are set from measurements of the running game: the rewards of a place reach the level of the music and ambience, link notes sit a little under it, interface sounds lower, and footsteps about 9 dB under it.
+- Sounds are placed left or right by where they happen on screen.
+- A soft limiter at the end of the mix rounds off rare peaks instead of clipping, and a voice limit and short per-sound cooldowns stop pile-ups and double triggers.
 
 ## Writing
 
@@ -127,6 +155,8 @@ Show controls at the start of the journey and on the pause screen.
 | Interact / continue a note | E or Enter |
 | Open or close the field journal | Tab |
 | Pause / resume | Escape (Q quits while paused) |
+| Sound off / on | M |
+| Change music or sound volume | On the pause screen: W / S or Up / Down choose, A / D or Left / Right change |
 
 Use configurable movement speed, jump impulse, and gravity. Do not allow another jump while airborne.
 
@@ -234,6 +264,17 @@ Use a small `Player` struct with position, velocity, size, grounded state, and a
 - Reset player and checkpoint references before destroying their owner.
 - Do not represent a missing destination with a fake node.
 
+## Audio implementation
+
+- Raylib's audio module (miniaudio) is used. `main` opens the audio device after the window and before the game loads any sound, and closes it after the game has unloaded every sound and stream.
+- `GameAudio` (`Audio.h` / `Audio.cpp`) owns every music stream and sound. Music and ambience are streams (Ogg Vorbis, 48 kHz) with large buffers, so painting a new place cannot starve them; effects are decoded sounds, each with an alias so a sound that is still ringing is not cut off when it plays again.
+- `GameSound.cpp` decides which music, ambience, and effects fit each place and state. Gameplay calls the audio module only from its event handlers; drawing functions only read the settings.
+- Streams are updated every frame, also while paused. Pausing dips the music and lets the world's sounds glide to silence and wait; interface sounds keep playing. Volume changes, muting, and stopping always glide (no clicks): streams fade, every playing sound's level is eased each frame, and a master gain at the end of the mix glides on mute and before shutdown.
+- Replay forgets scheduled sounds and starts the first place's music again. Completion fades into the finale.
+- If the device or a file cannot be opened, the game logs a warning naming it and continues; without the folder it is silent.
+- The pause screen has a small sound panel: music and sound levels (in steps of 10%, shown as notches and a percentage) and a mute switch. While a level changes, it plays at that level so it can be heard. M mutes and unmutes anywhere. Settings last for the session.
+- `tools/audio/build_audio.py` rebuilds every file in `assets/audio` from its sources and writes `CREDITS.md`; `tools/audio/check_audio.py` measures every file and checks each loop's seam.
+
 ## Folder structure
 
 ```text
@@ -249,13 +290,17 @@ src/
   Player.h / Player.cpp    movement, the jump check, and the traveler sprite and animation
   Input.h                  keyboard read once per frame
   GameScene.cpp            composing a frame: layers, platforms, traveler, lights, post pass
-  GameUi.cpp               HUD, callouts, field journal, notes, pause, ending
+  GameUi.cpp               HUD, callouts, field journal, notes, pause and its sound panel, ending
+  GameSound.cpp            which music, ambience, and effects fit each place and event
+  Audio.h / Audio.cpp      the audio module: loading, streams, effects, fades, volume, mute
   Art.h / ArtCommon.*      shared art types and helpers (layers, ledges, glows, wind)
   Paint.h / Paint.cpp      CPU painting: masks, shading, noise, dithering
   Lighting.h / Lighting.cpp  render targets, light map, bloom and grade shader
   ForestArt.cpp  RuinsArt.cpp  GardenArt.cpp  EdgeArt.cpp   one file per region
   Effects.*                particles
   Theme.h  DrawHelpers.h   interface colors and small helpers
+assets/audio/              music/, ambience/, sfx/ (Ogg Vorbis), CREDITS.md, licenses/
+tools/audio/               build_audio.py (rebuilds assets/audio and its credits), check_audio.py
 docs/readme/               documentation art for the README (not used by the game)
 ```
 
@@ -275,10 +320,15 @@ docs/readme/               documentation art for the README (not used by the gam
 - All allocated nodes are released once, with no dangling references during play or shutdown.
 - Exploring text is written in an adventure voice; technical teaching lives in the journal and first-time callouts.
 - The completion screen shows no memory diagnostics.
+- Music and ambience change smoothly with the four places, with no audible loop seams or abrupt cuts.
+- Important player, world, journal, and objective events have restrained, fitting sound; repeated sounds vary and do not pile up.
+- Pause, transitions, replay, completion, mute, and the volume controls behave correctly, and the game runs silently when the audio assets or device are unavailable.
+- Every sound and stream is unloaded before the audio device closes.
+- Every third-party audio asset has a verified license and complete attribution in ssets/audio/CREDITS.md.
 - A beginner can find and understand the node definition, list operations, region setup, and player-to-node interaction without navigating a large framework.
 
 ## Instructions to the coding agent
 
 Do not replace linked lists with arrays, vectors, coordinate-based adjacency, or a visual mock graph for gameplay. Arrays or vectors may hold art and fixed UI data, but platform traversal and the journal must consult actual nodes and links.
 
-Use plain C++ and explicit pointer checks. Add short comments where links are connected, where circular traversal stops, and where nodes are freed. Prefer a few small, understandable operations over a generic framework. Visual quality and the player's experience have high priority: art direct, implement, inspect the running game at 1280x720, and refine every region, as long as the art stays decoration and the single-source-of-truth design holds.
+Use plain C++ and explicit pointer checks. Add short comments where links are connected, where circular traversal stops, and where nodes are freed. Prefer a few small, understandable operations over a generic framework. Visual quality, sound, and the player's experience have high priority: art direct, implement, inspect the running game at 1280x720, listen to it, and refine every region, as long as the art and sound stay presentation and the single-source-of-truth design holds.

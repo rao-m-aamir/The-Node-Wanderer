@@ -416,25 +416,31 @@ void bakeGarden(RegionArt& art, const World& world) {
 
     // Rolling hills with cypresses, and an overgrown observatory on the far right.
     Picture hills(CANVAS_WIDTH, CANVAS_HEIGHT);
-    for (int x = 0; x < CANVAS_WIDTH; x++) {
+    auto hillTop = [](int x) { // the hills' outline, in steps of two pixels
         float y = 214.0f + std::sin(x * 0.011f + 1.3f) * 14.0f + std::sin(x * 0.027f) * 6.0f;
-        int top = (int)(std::floor(y / 2.0f) * 2.0f);
+        return (int)(std::floor(y / 2.0f) * 2.0f);
+    };
+    for (int x = 0; x < CANVAS_WIDTH; x++) {
+        int top = hillTop(x);
         for (int yy = top; yy < CANVAS_HEIGHT; yy++) hills.set(x, yy, HILLS[(yy - top < 2) ? 2 : 0]);
     }
     for (int i = 0; i < 14; i++) {
         int x = 20 + i * 46 + (int)(hash01(i * 13 + 2) * 20.0f);
         int height = 26 + (int)(hash01(i * 17 + 4) * 26.0f);
-        int base = 214 + (int)(std::sin(x * 0.011f + 1.3f) * 14.0f);
+        int base = hillTop(x) + 1; // rooted in the hill's outline, so none floats above it or sinks into it
         for (int k = 0; k < height; k++) {
             int half = (int)(5.0f * std::sin((k + 2.0f) / (height + 2.0f) * 3.14159f));
             for (int xx = -half; xx <= half; xx++) hills.set(x + xx, base - k, HILLS[(xx < 0) ? 1 : 0]);
         }
     }
+    const int domeY = hillTop(566) - 12; // the observatory: a dome on a drum that stands on the hill
     for (int y = -18; y <= 0; y++) {
-        for (int x = -18; x <= 18; x++) if (x * x + y * y <= 18 * 18) hills.set(566 + x, 206 + y, HILLS[1]);
+        for (int x = -18; x <= 18; x++) if (x * x + y * y <= 18 * 18) hills.set(566 + x, domeY + y, HILLS[1]);
     }
-    hills.rect(548, 206, 36, 12, HILLS[1]);
-    hills.rect(564, 190, 3, 16, HILLS[3]);
+    for (int x = 548; x < 584; x++) {
+        for (int y = domeY; y <= hillTop(x); y++) hills.set(x, y, HILLS[1]);
+    }
+    hills.rect(564, domeY - 16, 3, 16, HILLS[3]);
     fogRows(hills, MIST, 180, 300, 0.25f, 0.5f);
     storeLayer(art, hills, 0.0f, 0);
 

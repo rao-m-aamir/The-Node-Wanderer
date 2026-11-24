@@ -22,12 +22,14 @@ Game::Game() {
 
     world.build();
     checkRouteJumps();
+    audio.load(); // after InitAudioDevice() in main; silent if there is no device or no files
     startJourney();
 }
 
 // A new journey (the first start or a replay): the first place is entered behind a dark beat
 // that names it, then the scene fades in.
 void Game::startJourney() {
+    audio.cancelPending(); // a replay: nothing from the last journey is still to come
     for (bool& seen : calloutSeen) {
         seen = false;
     }
@@ -78,6 +80,7 @@ Game::~Game() {
 
     regionArt.clear();
     renderer.unload();
+    audio.unload(); // every sound and stream, before main closes the audio device
 }
 
 bool Game::shouldQuit() const {
@@ -175,6 +178,7 @@ void Game::enterRegion(int index) {
         default:
             break;
     }
+    startRegionAudio(index);
 }
 
 // Fade to black, switch region (or show the summary), then fade back in with the region's name.
@@ -183,6 +187,10 @@ void Game::startTransition(int target) {
     transitionTimer = 0.0f;
     transitionSwitched = false;
     player.velocity = Vector2{0.0f, 0.0f};
+    audio.play(Sfx::Exit); // a breath of air into the light
+    audio.stopMusic(1.1f);  // fading with the screen; the next place's music begins in the dark
+    audio.stopBeds(0.9f);
+    audio.setAccents(-1);
 }
 
 void Game::completeRegionObjective(const std::string& question, const std::string& answer) {
@@ -193,7 +201,11 @@ void Game::completeRegionObjective(const std::string& question, const std::strin
     pages = {question, answer};
     pageKinds = {NoteKind::Question, NoteKind::Answer};
     pageIndex = 0;
-    state = GameState::Message;
+    state = GameState::Message; // the exit's chord announces this note
+    const Sfx gates[REGION_COUNT] = {Sfx::Gate1, Sfx::Gate2, Sfx::Gate3, Sfx::Gate4};
+    Rectangle gate;
+    float side = world.getGateRect(regionIndex, gate) ? sideOf(gate.x + gate.width * 0.5f) : 0.0f;
+    audio.play(gates[regionIndex], 1.0f, 1.0f, side, 0.3f);
 }
 
 // ---------------------------------------------------------------------------
@@ -201,9 +213,18 @@ void Game::completeRegionObjective(const std::string& question, const std::strin
 // ---------------------------------------------------------------------------
 
 void Game::update(const InputFrame& input, float dt) {
+    if (input.mute) toggleMute(); // works everywhere, also on the pause screen
+    updateAudioMix(dt);
+    audio.update(dt, state != GameState::Paused); // streams keep playing (ducked) while paused
+
     // Paused: the world and all of its clocks stand still until Esc resumes.
     if (state == GameState::Paused) {
-        if (input.pause) state = stateBeforePause;
+        updatePauseAudioPanel(input);
+        if (input.pause) {
+            state = stateBeforePause;
+            audio.resumeWorld();
+            audio.play(Sfx::CoverOpen);
+        }
         if (input.quit) quitRequested = true;
         return;
     }
@@ -235,6 +256,9 @@ void Game::update(const InputFrame& input, float dt) {
                 titleCardTimer = TITLE_CARD_SECONDS;
             } else {
                 state = GameState::Complete;
+                audio.playMusic(Track::Finale, 1.0f, 5.0f, 0.3f); // the dawn piece, further on
+                audio.stopBeds(2.5f);
+                audio.play(Sfx::Complete, 1.0f, 1.0f, 0.0f, 0.4f);
             }
             return; // a key pressed on this frame belonged to the old screen, not the new note or summary
         }
@@ -246,6 +270,7 @@ void Game::update(const InputFrame& input, float dt) {
 
     if (state != GameState::Complete && input.toggleInspector) {
         inspectorOpen = !inspectorOpen;
+        audio.play(inspectorOpen ? Sfx::JournalOpen : Sfx::JournalClose);
     }
 
     switch (state) {
@@ -261,8 +286,11 @@ void Game::update(const InputFrame& input, float dt) {
             if (input.pause) {
                 stateBeforePause = GameState::Message;
                 state = GameState::Paused;
+                audio.pauseWorld();
+                audio.play(Sfx::CoverClose);
             } else if (input.interact) {
                 pageIndex++;
+                audio.play(pageIndex >= pages.size() ? Sfx::NoteDismiss : Sfx::Page);
                 if (pageIndex >= pages.size()) {
                     pages.clear();
                     pageKinds.clear();
@@ -276,6 +304,8 @@ void Game::update(const InputFrame& input, float dt) {
             if (input.pause) {
                 stateBeforePause = GameState::Playing;
                 state = GameState::Paused;
+                audio.pauseWorld();
+                audio.play(Sfx::CoverClose);
             } else {
                 if (input.interact) tryBuildBridge();
                 if (state == GameState::Playing) updatePlaying(input, dt); // the bridge may have opened a note
@@ -301,15 +331,31 @@ void Game::updatePlaying(const InputFrame& input, float dt) {
 
     int stepBefore = (int)(player.walkPhase / 3.14159f);
     updatePlayerMovement(player, physics, input.move, input.jump, dt);
-    if (jumping) spawnDust(particles, playerFeet(), 4, dustColor());
+    const float side = sideOf(player.position.x + player.size.x / 2.0f);
+    if (jumping) {
+        spawnDust(particles, playerFeet(), 4, dustColor());
+        audio.play(Sfx::Jump, 1.0f, 1.0f, side);
+    }
     if (player.grounded && (int)(player.walkPhase / 3.14159f) != stepBefore) {
         spawnDust(particles, playerFeet(), 2, dustColor()); // a little dust at each footstep
+        audio.playStep(surfaceUnderfoot(), 1.0f, side);     // and its sound, in time with the walk
+    }
+    const float fallSpeed = player.velocity.y; // before a landing stops it
+    if (!player.grounded) {
+        // Falling well below the ledge it left (no jump on the route drops more than 90 px): the rush of air.
+        float below = player.position.y + player.size.y - ((player.currentNode != nullptr) ? player.currentNode->platformPosition.y : 0.0f);
+        if (below > 110.0f && fallSpeed > 0.0f && !fallSoundPlayed && player.currentNode != nullptr) {
+            audio.play(Sfx::Fall, 1.0f, 1.0f, side);
+            fallSoundPlayed = true;
+        }
     }
     const RegionInfo& place = world.getRegion(regionIndex);
     float bottom = player.position.y + player.size.y;
     if (place.waterline > 0.0f && previousBottom < place.waterline && bottom >= place.waterline) { // into the water
         Vector2 splash = {player.position.x + player.size.x / 2.0f, place.waterline};
         spawnBurst(particles, splash, 16, Color{190, 214, 240, 255}, Color{120, 150, 200, 255}, 150.0f, 520.0f, 0.7f);
+        audio.play(Sfx::Splash, 1.0f, 1.0f, side);
+        fallSoundPlayed = true; // under the water there is no rush of air
     }
 
     // Keep the player inside the world horizontally.
@@ -320,7 +366,11 @@ void Game::updatePlaying(const InputFrame& input, float dt) {
     if (!wasGrounded && player.grounded) {
         player.landTimer = LAND_POSE_SECONDS;
         spawnDust(particles, playerFeet(), 7, dustColor());
+        float impact = std::fmax(0.0f, std::fmin(1.0f, (fallSpeed - 200.0f) / 800.0f));
+        audio.playStep(surfaceUnderfoot(), 0.8f + 0.5f * impact, side); // the surface it landed on
+        if (impact > 0.3f) audio.play(Sfx::Land, 0.3f + 0.7f * impact, 1.0f, side); // only a real drop thuds
     }
+    if (player.grounded) fallSoundPlayed = false;
     if (state != GameState::Playing) {
         updateCamera(dt);
         return; // a landing finished an objective and opened a note
@@ -428,6 +478,8 @@ void Game::followLink(Node* destination) {
     nodeTimer = 0.0f;
     markVisited(destination);
     spawnArrivalEffects(viaPrevious);
+    // Each link has a note in the place's key: rising along next, falling back along previous.
+    audio.playNote(regionIndex, destination->id, viaPrevious, sideOf(destination->platformPosition.x + destination->platformWidth / 2.0f));
     if (!journeyStarted) {
         journeyStarted = true; // the first step: the controls have done their job and fade out
         journeyTimer = 0.0f;
@@ -453,6 +505,7 @@ void Game::startRootPassage(Node* destination) {
     passageDestination = destination;
     passageTimer = 0.0f;
     player.velocity = Vector2{0.0f, 0.0f};
+    audio.play(Sfx::Passage, 1.0f, 1.0f, sideOf(player.position.x));
     spawnBurst(particles, Vector2{player.position.x + player.size.x / 2.0f, player.position.y + 20.0f}, 14,
                Color{255, 214, 236, 255}, Color{120, 255, 230, 255}, 80.0f, 40.0f, 0.8f);
 }
@@ -494,6 +547,7 @@ void Game::checkObjectives() {
                                               current->platformPosition.y - 44.0f},
                            16, Color{214, 176, 96, 255}, COOL_LIGHT, 90.0f, 30.0f, 0.9f);
                 showToast("You took the key. Its light stirs in your hands.", 5.0f);
+                audio.play(Sfx::Key, 1.0f, 1.0f, sideOf(current->platformPosition.x + current->platformWidth / 2.0f), 0.15f);
             } else if (stage == 1 && current->id == 2) {
                 setStage(2); // the light kindles the Old Hall's brazier
                 setCheckpoint(current);
@@ -501,6 +555,7 @@ void Game::checkObjectives() {
                                               current->platformPosition.y - 18.0f},
                            18, Color{255, 168, 76, 255}, Color{255, 232, 150, 255}, 80.0f, -20.0f, 1.0f);
                 showToast("The brazier blazes up, and the old hall wakes.", 5.0f);
+                audio.play(Sfx::Brazier, 1.0f, 1.0f, sideOf(current->platformPosition.x + current->platformWidth - 20.0f), 0.1f);
             } else if (stage == 2 && current->next == nullptr) {
                 completeRegionObjective(
                     "Journal question: what does a doubly linked list store\n"
@@ -536,6 +591,7 @@ void Game::checkObjectives() {
                 setStage(1);
                 setCheckpoint(current);
                 showToast("The bridge is gone. Only wind lies past the edge.", 5.0f);
+                audio.play(Sfx::EdgeGust, 1.0f, 1.0f, 0.4f);
             } else if (stage == 2 && current->id == 4) {
                 completeRegionObjective(
                     "Journal question: what must you do before following a pointer?",
@@ -558,10 +614,12 @@ void Game::tryBuildBridge() {
     Node* current = player.currentNode;
     if (current == nullptr || current->id != 3 || !player.grounded) {
         showToast("Stand at the cliff's edge to mend the bridge."); // not while jumping or falling past the edge
+        audio.play(Sfx::Tick);
         return;
     }
     if (!inspectorOpen) {
         showToast("Look before you build: open your journal (Tab).");
+        audio.play(Sfx::Tick);
         return;
     }
 
@@ -575,6 +633,7 @@ void Game::tryBuildBridge() {
                        WARM_LIGHT, WHITE, 80.0f, 60.0f, 1.0f);
         }
         showCallout(Callout::Append); // no note: the bridge assembling is the answer
+        playBridgeAssembly();
         toastTimer = 0.0f;            // "the bridge is gone" no longer holds
     }
 }
@@ -613,6 +672,7 @@ void Game::recoverFromFall(bool movedBackward) {
 }
 
 void Game::recoverFromNullHazard() {
+    audio.play(Sfx::Hazard, 1.0f, 1.0f, sideOf(player.position.x)); // a low hush from the depth, never a jolt
     restoreToCheckpoint();
     const char* place = (player.currentNode != nullptr) ? player.currentNode->label : "path";
     showCallout(Callout::NullLink); // the journal's side of it: N3->next is NULL
@@ -635,6 +695,8 @@ void Game::restoreToCheckpoint() {
     }
     player.landTimer = 0.0f;
     fadeTimer = RECOVERY_FADE_SECONDS; // brief fade back in at the checkpoint
+    fallSoundPlayed = false;
+    audio.play(Sfx::Recover, 1.0f, 1.0f, 0.0f, 0.15f); // the light gathers back into the traveler
     updateCamera(0.0f);
     clearParticles(particles);
     spawnGather(particles, Vector2{player.position.x + player.size.x / 2.0f, player.position.y + 24.0f}, 16, WARM_LIGHT);
@@ -646,6 +708,7 @@ void Game::setCheckpoint(Node* node, bool flashIfSame) {
     }
     checkpointNode = node;
     checkpointPulse = Pulse{Vector2{node->platformPosition.x, node->platformPosition.y}, 0.8f, 0.8f};
+    audio.play(Sfx::Checkpoint, 1.0f, 1.0f, sideOf(node->platformPosition.x + 22.0f), 0.2f); // the lantern catches
     spawnBurst(particles, Vector2{node->platformPosition.x + 22.0f, node->platformPosition.y - 26.0f}, 12, WARM_LIGHT,
                CHECKPOINT_CREAM, 60.0f, -10.0f, 0.9f);
 }

@@ -5,6 +5,7 @@
 
 #include "raylib.h"
 #include "Art.h"
+#include "Audio.h"
 #include "Effects.h"
 #include "Input.h"
 #include "Player.h"
@@ -87,6 +88,15 @@ private:
     Color dustColor() const;
     float regionWind() const;
 
+    // Sound (GameSound.cpp): which effect fits an event, and the mix for the current state.
+    void startRegionAudio(int index);
+    void updateAudioMix(float dt);
+    void updatePauseAudioPanel(const InputFrame& input);
+    void toggleMute();
+    void playBridgeAssembly();
+    Surface surfaceUnderfoot() const;
+    float sideOf(float worldX) const; // -1 left of the screen .. 1 right, for panning
+
     // Scene (GameScene.cpp)
     SceneView makeSceneView() const;
     void drawScene() const;
@@ -139,6 +149,7 @@ private:
     SceneRenderer renderer; // the pixel canvas, light map, and final pass (owned; unloaded in ~Game)
     RegionArt regionArt;    // the active region's painted scenery and platforms (owned)
     ParticlePool particles;
+    GameAudio audio;        // music, ambience, and effects (owned; unloaded in ~Game, before the device closes)
 
     std::vector<std::string> pages; // current journal note pages
     std::vector<NoteKind> pageKinds;
@@ -162,4 +173,10 @@ private:
     float journeyTimer = 0.0f;     // seconds since then
     Pulse checkpointPulse = {};
     float elapsed = 0.0f;
+
+    // Sound state (no gameplay reads these)
+    bool fallSoundPlayed = false;  // the rush of air plays once per long fall
+    bool notePending = false;      // a note opened; its paper sound waits until it can be seen
+    int audioRow = 0;              // the pause screen's sound row: 0 music, 1 sounds, 2 mute
+    float audioRowFlash = 0.0f;    // > 0 just after a value there changed
 };

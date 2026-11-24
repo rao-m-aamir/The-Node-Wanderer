@@ -106,23 +106,26 @@ void paintStrata(Picture& p, const Mask& m, int count, int seed) {
     }
 }
 
-// A wind-bent pine: layers of needles swept to one side.
+// A wind-bent pine: a trunk leaning with the wind (which blows to the right, see windAt) and
+// layers of needles streaming the same way.
 Picture paintPine(int height, int seed) {
     Picture p(height, height + 2);
     int base = height;
     float cx = height * 0.5f;
-    for (int y = 0; y < height; y++) { // the trunk, leaning with the wind
+    float firstLayer = height * 0.25f;
+    // The trunk starts inside the top layer of needles, so its tip never shows above them.
+    for (int y = (int)firstLayer + 1; y < height; y++) {
         int x = (int)(cx + (base - y) * 0.12f);
         p.set(x, y, WOOD[0]);
         p.set(x + 1, y, WOOD[1]);
     }
     int layers = 4 + height / 14;
     for (int l = 0; l < layers; l++) {
-        float y = height * 0.25f + l * (height * 0.65f / layers);
+        float y = firstLayer + l * (height * 0.65f / layers);
         float width = 4.0f + (y / height) * height * 0.32f;
         float x = cx + (base - y) * 0.12f;
         Mask needles(p.width, p.height);
-        Vector2 tri[3] = {{x - width, y + 3.0f}, {x + width * 0.55f, y + 3.0f}, {x - width * 0.35f, y - 5.0f}};
+        Vector2 tri[3] = {{x - width * 0.55f, y + 3.0f}, {x + width, y + 3.0f}, {x + width * 0.35f, y - 5.0f}};
         needles.polygon(tri, 3);
         needles.measure();
         Shading s;

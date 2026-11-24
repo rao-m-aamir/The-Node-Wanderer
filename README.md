@@ -10,6 +10,7 @@
 
 **The Node Wanderer** is a short pixel-art adventure. A traveler with a hat, a red scarf, and a lantern crosses four places: a deep forest, drowned ruins under the moon, a night garden that never ends, and the cliffs where the world runs out.
 Follow the warm light from ledge to ledge, carry a key's light home, walk a garden that loops back on itself, and mend a bridge over nothing.
+Each place has its own music and sounds: birds and wind in the trees, drips in the flooded halls, crickets in the night garden, and wind across the cliffs until the dawn.
 
 It is also a game about linked lists. Each place is built from one list, the ledges you stand on are its nodes, and you can only step where a link leads.
 Your field journal (<kbd>Tab</kbd>) shows how it works. The game is written in C++17 with Raylib 5.5.
@@ -63,8 +64,15 @@ cmake --build build
 .\build\NodeWanderer.exe
 ```
 
-The first configure step downloads Raylib, so it needs an internet connection.
-The result is one self-contained executable: Raylib, the MSVC runtime, the art code, and the shaders are all built into `NodeWanderer.exe`, so it runs on another Windows PC without installing anything.
+The first configure step downloads Raylib, so it needs an internet connection. Playing needs none.
+Raylib, the MSVC runtime, the art, and the shaders are built into `NodeWanderer.exe`, so it needs only Windows itself. The music and sounds are files in `assets/audio`; each build copies that folder beside the exe (`build\assets\audio`).
+To make a folder you can share or copy to another PC, install the build:
+
+```powershell
+cmake --install build --prefix dist --component game   # dist\NodeWanderer.exe and dist\assets\audio
+```
+
+The game looks for `assets/audio` beside the exe first, then in the folder it was started from, so it also runs from the repository. Without the folder, or without a sound device, it plays in silence and says so in the console.
 For a debug build, where a failed startup check also stops the program, use `-DCMAKE_BUILD_TYPE=Debug`.
 
 | Action | Keys |
@@ -74,6 +82,8 @@ For a debug build, where a failed startup check also stops the program, use `-DC
 | Interact, turn a note's page | <kbd>E</kbd> or <kbd>Enter</kbd> |
 | Open or close the field journal | <kbd>Tab</kbd> |
 | Pause and resume (the pause screen lists the controls) | <kbd>Esc</kbd> (<kbd>Q</kbd> quits while paused) |
+| Sound off or on | <kbd>M</kbd> |
+| Music and sound volume, on the pause screen | <kbd>W</kbd> <kbd>S</kbd> or <kbd>↑</kbd> <kbd>↓</kbd> choose, <kbd>A</kbd> <kbd>D</kbd> or <kbd>←</kbd> <kbd>→</kbd> change |
 | At the journey's end | <kbd>R</kbd> walks again, <kbd>Q</kbd> or <kbd>Esc</kbd> exits |
 
 <img src="docs/readme/divider.svg" width="100%" alt="">
@@ -131,7 +141,11 @@ bool isPlatformSolid(const Node* current, const Node* candidate, ListKind kind) 
 | Keyboard input, read once per frame | `src/Input.h` |
 | Movement, the jump simulation, the traveler sprite, and its scarf and lantern | `src/Player.cpp` |
 | Composing a frame: layers, platforms, traveler, water, lights, and the final pass | `src/GameScene.cpp` |
-| HUD, first-time callouts, field journal, notes, pause, and the ending | `src/GameUi.cpp` |
+| HUD, first-time callouts, field journal, notes, pause and its sound panel, and the ending | `src/GameUi.cpp` |
+| Which music, ambience, and effects fit each place and event | `src/GameSound.cpp` |
+| The audio module: loading, music streams, effects, fades, volume, and mute | `src/Audio.h`, `src/Audio.cpp` |
+| The music and sounds, their credits, and copies of their licenses | `assets/audio/` |
+| The script that builds every sound from its sources, and a loudness and loop-seam check | `tools/audio/` |
 | Shared art types and helpers: layers, wind, swaying pieces, ledges, link glows, lanterns, the guiding stream | `src/Art.h`, `src/ArtCommon.h`, `src/ArtCommon.cpp` |
 | Painting on the CPU: masks, shading toward a light, noise, dithering | `src/Paint.h`, `src/Paint.cpp` |
 | Render targets, the light map, and the bloom and color-grade shader | `src/Lighting.h`, `src/Lighting.cpp` |
@@ -152,6 +166,34 @@ The world is drawn into a 640x360 pixel canvas that is scaled up 2x, so the scen
 - **The traveler** is a 14x24-pixel explorer with a hat, a red scarf, a backpack, and a lantern. They breathe when idle, walk in two steps, stretch into a jump, and bend their knees on landing. The scarf is a small chain of points that trails behind, streams when walking or in a gust, and ripples; the lantern swings like a pendulum when the traveler starts and stops.
 - **Feedback:** dust at each footstep, jump, and landing; leaves, stone chips, or petals on arriving at a new ledge; a splash in the ruins' water; sparks when a checkpoint lantern lights; light gathering back into the traveler after a fall; and between places, a dark moment that names the place ahead before it fades in.
 - **Interface:** in play, a small card with the place and what to do, and a hint for the journal and the pause screen; the controls appear at the start of the journey. Reading happens in an explorer's field journal: the journal itself, its notes, the pause cover, and the last spread at the journey's end.
+
+## The sound
+
+The music is by [Scott Buckley](https://www.scottbuckley.com.au) and is used under the [Creative Commons Attribution 4.0 license](https://creativecommons.org/licenses/by/4.0/). Four of his pieces were cut into seamless loops:
+
+- **The First Connection:** 'Cobalt' by Scott Buckley - released under CC-BY 4.0. www.scottbuckley.com.au
+- **The Forgotten Return:** 'Hiraeth' by Scott Buckley - released under CC-BY 4.0. www.scottbuckley.com.au
+- **The Endless Garden:** 'Reverie' by Scott Buckley - released under CC-BY 4.0. www.scottbuckley.com.au
+- **The Edge of Nothing:** 'Cobalt' (the version without piano) by Scott Buckley - released under CC-BY 4.0. www.scottbuckley.com.au
+- **Dawn, and the journey's end:** 'Hymn To The Dawn' by Scott Buckley - released under CC-BY 4.0. www.scottbuckley.com.au
+
+The ambience and effects are in the public domain (CC0): field recordings from [Freesound](https://freesound.org) (forest birds, cave drips, still water, a small fire, crickets, wind, and more), footsteps and the journal's paper and leather from [Kenney](https://kenney.nl)'s audio packs, and harp, chime, vibraphone, and bell samples from the [Versilian Community Sample Library](https://github.com/sgossner/VCSL). [`assets/audio/CREDITS.md`](assets/audio/CREDITS.md) lists every source with its creator, page, and license, and what was done to it for each file; copies of the licenses are in `assets/audio/licenses/`.
+
+- **One score, four places.** Each place has its own loop and its own bed of ambience. Between places, the old music fades with the screen, and the new place's music and ambience rise in the dark beat that names it, with a short motif in its key.
+- **Sounds that belong to the music.** Each link you follow plays a harp note in the key of the place's music, rising along `next`. In the ruins a cooler vibraphone note falls back along `previous`, and the garden's current ends on a full chord when the tail's `next` brings you home. Gates open on a chord of their place.
+- **Footsteps follow the walk,** with a sound for each surface (grass, earth, stone, wet stone, wood, and a soft mushroom cap), and each step is a little different.
+- **The Edge of Nothing:** the wind grows and the ravine's deep draft rises as you near the broken bridge, and stepping into the gap brings a low swell from the depth, never a jolt. Mending the link lays the planks one by one, lights the lanterns on notes of the dawn's key, quiets the wind, and brings the dawn.
+- **A gentle mix.** The music dips under notes, the journal, and the pause screen. Levels were set from measurements of the running game, so the rewards of a place stand out and footsteps stay quiet. Fades, mute, and shutdown glide instead of cutting, and a soft limiter catches rare peaks.
+
+Every sound file is rebuilt from its sources by `tools/audio/build_audio.py`, which also writes `CREDITS.md`. It needs Python 3 with `numpy`, `scipy`, `soundfile`, and `pyloudnorm`, and downloads the sources into a cache the first time:
+
+```powershell
+python tools/audio/build_audio.py              # everything
+python tools/audio/build_audio.py --only music,ambience
+python tools/audio/check_audio.py              # loudness of every file, and each loop's seam
+```
+
+## README art
 
 The animated pictures in this README are documentation art, drawn in code as well. `docs/readme/make-art.ps1` paints them pixel by pixel with the game's palettes and the traveler sprite from `src/Player.cpp`, then writes them as SVG with CSS and SMIL animation. Each one loops. To redraw them after changing the art:
 

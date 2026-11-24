@@ -1,0 +1,1040 @@
+{
+ "ambience/edge_dawn.ogg": [
+  [
+   "robin_woodland",
+   "high-pass 220 Hz"
+  ],
+  [
+   "robin_woodland",
+   "section 8.4-87.9 s looped with a 5 s crossfade"
+  ]
+ ],
+ "ambience/edge_gap.ogg": [
+  [
+   "wind_body",
+   "low-pass 350 Hz, transposed down 5 semitones (the ravine's draft)"
+  ],
+  [
+   "wind_body",
+   "looped: section 23.9-146.1 s of the transposed wind with a 6 s crossfade"
+  ]
+ ],
+ "ambience/edge_wind.ogg": [
+  [
+   "wind_body",
+   "the body of the wind"
+  ],
+  [
+   "pine_breeze",
+   "high-pass 1.5 kHz, looped (5 s crossfade) and repeated over the body, -4 dB"
+  ],
+  [
+   "wind_body",
+   "the mix looped: section 9.8-153.9 s with a 6 s crossfade"
+  ]
+ ],
+ "ambience/forest.ogg": [
+  [
+   "forest_evening",
+   "high-pass 90 Hz; section 5.6-84.9 s looped with a 5 s crossfade"
+  ]
+ ],
+ "ambience/garden.ogg": [
+  [
+   "soft_crickets",
+   "high-pass 300 Hz"
+  ],
+  [
+   "night_chorus",
+   "band-pass 2-9 kHz, repeated far behind, -12 dB"
+  ],
+  [
+   "soft_crickets",
+   "the mix looped: section 49.6-152.2 s of the recording with a 5 s crossfade"
+  ]
+ ],
+ "ambience/ruins.ogg": [
+  [
+   "cave_drips",
+   "low-pass 7 kHz; the loudest drips turned down by a gentle peak limiter"
+  ],
+  [
+   "lake_lapping",
+   "low-pass 1.2 kHz, looped (3 s crossfade) and repeated under the drips, -9 dB"
+  ],
+  [
+   "campfire",
+   "band-pass 400 Hz-5 kHz, looped (3 s crossfade) and repeated very low, -22 dB"
+  ],
+  [
+   "cave_drips",
+   "the mix looped: section 7.5-87.9 s with a 4 s crossfade"
+  ]
+ ],
+ "music/dawn.ogg": [
+  [
+   "hymn",
+   "section 17.50-124.50 s, the last 6 s crossfaded into the start (seamless loop); resampled to 48000 Hz; loudness set to -21 LUFS"
+  ]
+ ],
+ "music/edge.ogg": [
+  [
+   "cobalt_nopiano",
+   "section 15.20-179.90 s, the last 7 s crossfaded into the start (seamless loop); resampled to 48000 Hz; loudness set to -21 LUFS"
+  ]
+ ],
+ "music/finale.ogg": [
+  [
+   "hymn",
+   "section 152.00-352.20 s, the last 7 s crossfaded into the start (seamless loop); resampled to 48000 Hz; loudness set to -21 LUFS"
+  ]
+ ],
+ "music/forest.ogg": [
+  [
+   "cobalt",
+   "section 18.60-179.40 s, the last 7 s crossfaded into the start (seamless loop); resampled to 48000 Hz; loudness set to -21 LUFS"
+  ]
+ ],
+ "music/garden.ogg": [
+  [
+   "reverie",
+   "section 8.00-200.60 s, the last 6 s crossfaded into the start (seamless loop); resampled to 48000 Hz; loudness set to -21 LUFS"
+  ]
+ ],
+ "music/ruins.ogg": [
+  [
+   "hiraeth",
+   "section 22.80-166.90 s, the last 7 s crossfaded into the start (seamless loop); resampled to 48000 Hz; loudness set to -21 LUFS"
+  ]
+ ],
+ "sfx/accent/chime_1.ogg": [
+  [
+   "chime_G#5",
+   "note A5 (transposed +1 semitones)"
+  ]
+ ],
+ "sfx/accent/chime_2.ogg": [
+  [
+   "chime_C6",
+   "note D6 (transposed +2 semitones)"
+  ]
+ ],
+ "sfx/accent/chime_3.ogg": [
+  [
+   "chime_F#5",
+   "note F#5"
+  ]
+ ],
+ "sfx/accent/chime_4.ogg": [
+  [
+   "marktree_random",
+   "4-6.5 s, low-pass 9 kHz"
+  ]
+ ],
+ "sfx/accent/creak_1.ogg": [
+  [
+   "rope",
+   "0.0-1.7 s, low-pass 4.5 kHz"
+  ]
+ ],
+ "sfx/accent/creak_2.ogg": [
+  [
+   "rope",
+   "1.8-3.5 s, low-pass 4.5 kHz"
+  ]
+ ],
+ "sfx/accent/creak_3.ogg": [
+  [
+   "rope",
+   "3.6-5.4 s, low-pass 4.5 kHz"
+  ]
+ ],
+ "sfx/accent/drip_1.ogg": [
+  [
+   "echo_drips",
+   "one drip at 13.31 s with its echo, low-pass 8 kHz"
+  ]
+ ],
+ "sfx/accent/drip_2.ogg": [
+  [
+   "echo_drips",
+   "one drip at 20.15 s with its echo, low-pass 8 kHz"
+  ]
+ ],
+ "sfx/accent/drip_3.ogg": [
+  [
+   "echo_drips",
+   "one drip at 52.82 s with its echo, low-pass 8 kHz"
+  ]
+ ],
+ "sfx/accent/drip_4.ogg": [
+  [
+   "echo_drips",
+   "one drip at 58.02 s with its echo, low-pass 8 kHz"
+  ]
+ ],
+ "sfx/accent/pebbles_1.ogg": [
+  [
+   "pebbles",
+   "1.0-2.8 s, low-pass 4 kHz, distant room"
+  ]
+ ],
+ "sfx/accent/pebbles_2.ogg": [
+  [
+   "stones",
+   "0.3-2.6 s, low-pass 2.5 kHz, distant room"
+  ]
+ ],
+ "sfx/journal/callout.ogg": [
+  [
+   "k_flip2",
+   "transposed up 2 semitones, high-pass 900 Hz (a slip of paper)"
+  ]
+ ],
+ "sfx/journal/close.ogg": [
+  [
+   "k_book_close",
+   "trimmed, low-pass 6 kHz"
+  ]
+ ],
+ "sfx/journal/cover_close.ogg": [
+  [
+   "k_book_close",
+   "transposed down 3 semitones, low-pass 1.8 kHz (the leather cover)"
+  ]
+ ],
+ "sfx/journal/cover_open.ogg": [
+  [
+   "k_book_open",
+   "transposed down 2 semitones, low-pass 3 kHz"
+  ]
+ ],
+ "sfx/journal/dismiss.ogg": [
+  [
+   "k_place1",
+   "trimmed, low-pass 4 kHz (a note set down)"
+  ]
+ ],
+ "sfx/journal/note.ogg": [
+  [
+   "k_flip3",
+   "trimmed, low-pass 6 kHz (a note pinned up)"
+  ]
+ ],
+ "sfx/journal/open.ogg": [
+  [
+   "k_book_open",
+   "trimmed, low-pass 8 kHz"
+  ],
+  [
+   "k_leather",
+   "leather strap, low-pass 6 kHz"
+  ]
+ ],
+ "sfx/journal/page_1.ogg": [
+  [
+   "k_flip1",
+   "trimmed to the flip itself, low-pass 9 kHz"
+  ]
+ ],
+ "sfx/journal/page_2.ogg": [
+  [
+   "k_flip2",
+   "trimmed to the flip itself, low-pass 9 kHz"
+  ]
+ ],
+ "sfx/journal/page_3.ogg": [
+  [
+   "k_flip3",
+   "trimmed to the flip itself, low-pass 9 kHz"
+  ]
+ ],
+ "sfx/journal/tick.ogg": [
+  [
+   "k_tick",
+   "low-pass 5 kHz"
+  ]
+ ],
+ "sfx/journal/toggle.ogg": [
+  [
+   "k_toggle",
+   "low-pass 4 kHz"
+  ]
+ ],
+ "sfx/move/fall.ogg": [
+  [
+   "whoosh",
+   "transposed down 4 semitones, low-pass 3 kHz, faded out (falling through air)"
+  ]
+ ],
+ "sfx/move/jump_1.ogg": [
+  [
+   "k_cloth1",
+   "coat and backpack rustle, trimmed, low-pass 7 kHz"
+  ]
+ ],
+ "sfx/move/jump_2.ogg": [
+  [
+   "k_cloth2",
+   "coat and backpack rustle, trimmed, low-pass 7 kHz"
+  ]
+ ],
+ "sfx/move/jump_3.ogg": [
+  [
+   "k_cloth3",
+   "coat and backpack rustle, trimmed, low-pass 7 kHz"
+  ]
+ ],
+ "sfx/move/land.ogg": [
+  [
+   "k_soft",
+   "soft thud, low-pass 1.6 kHz"
+  ]
+ ],
+ "sfx/move/recover.ogg": [
+  [
+   "marktree_slow_up",
+   "0-2.8 s, low-pass 9 kHz, faded (light gathering back)"
+  ]
+ ],
+ "sfx/move/splash.ogg": [
+  [
+   "pool_splash",
+   "trimmed to 1.3 s with a fade, low-pass 7 kHz"
+  ]
+ ],
+ "sfx/notes/r1_n2.ogg": [
+  [
+   "harp_C5",
+   "note D5 (transposed +2 semitones)"
+  ],
+  [
+   "chime_D5",
+   "note D5"
+  ]
+ ],
+ "sfx/notes/r1_n3.ogg": [
+  [
+   "harp_E5",
+   "note E5"
+  ],
+  [
+   "chime_E5",
+   "note E5"
+  ]
+ ],
+ "sfx/notes/r1_n4.ogg": [
+  [
+   "harp_G5",
+   "note G5"
+  ],
+  [
+   "chime_F#5",
+   "note G5 (transposed +1 semitones)"
+  ]
+ ],
+ "sfx/notes/r1_n5.ogg": [
+  [
+   "harp_G5",
+   "note A5 (transposed +2 semitones)"
+  ],
+  [
+   "chime_G#5",
+   "note A5 (transposed +1 semitones)"
+  ]
+ ],
+ "sfx/notes/r2_back_n1.ogg": [
+  [
+   "vibes_C5",
+   "note C5"
+  ],
+  [
+   "bowed_A4",
+   "note C5 (transposed +3 semitones)"
+  ]
+ ],
+ "sfx/notes/r2_back_n2.ogg": [
+  [
+   "vibes_E5",
+   "note Eb5 (transposed -1 semitones)"
+  ],
+  [
+   "bowed_E5",
+   "note Eb5 (transposed -1 semitones)"
+  ]
+ ],
+ "sfx/notes/r2_back_n3.ogg": [
+  [
+   "vibes_E5",
+   "note F5 (transposed +1 semitones)"
+  ],
+  [
+   "bowed_E5",
+   "note F5 (transposed +1 semitones)"
+  ]
+ ],
+ "sfx/notes/r2_back_n4.ogg": [
+  [
+   "vibes_E5",
+   "note G5 (transposed +3 semitones)"
+  ],
+  [
+   "bowed_E5",
+   "note G5 (transposed +3 semitones)"
+  ]
+ ],
+ "sfx/notes/r2_n2.ogg": [
+  [
+   "harp_E5",
+   "note Eb5 (transposed -1 semitones)"
+  ],
+  [
+   "chime_D5",
+   "note Eb5 (transposed +1 semitones)"
+  ]
+ ],
+ "sfx/notes/r2_n3.ogg": [
+  [
+   "harp_E5",
+   "note F5 (transposed +1 semitones)"
+  ],
+  [
+   "chime_E5",
+   "note F5 (transposed +1 semitones)"
+  ]
+ ],
+ "sfx/notes/r2_n4.ogg": [
+  [
+   "harp_G5",
+   "note G5"
+  ],
+  [
+   "chime_F#5",
+   "note G5 (transposed +1 semitones)"
+  ]
+ ],
+ "sfx/notes/r2_n5.ogg": [
+  [
+   "harp_B5",
+   "note Bb5 (transposed -1 semitones)"
+  ],
+  [
+   "chime_A#5",
+   "note Bb5"
+  ]
+ ],
+ "sfx/notes/r3_n1.ogg": [
+  [
+   "harp_C5",
+   "note D5 (transposed +2 semitones)"
+  ],
+  [
+   "harp_G5",
+   "note A5 (transposed +2 semitones)"
+  ],
+  [
+   "harp_D6",
+   "note D6"
+  ],
+  [
+   "marktree_down",
+   "0.1-2.4 s, low-pass 10 kHz"
+  ]
+ ],
+ "sfx/notes/r3_n2.ogg": [
+  [
+   "harp_E5",
+   "note E5"
+  ],
+  [
+   "chime_E5",
+   "note E5"
+  ]
+ ],
+ "sfx/notes/r3_n3.ogg": [
+  [
+   "harp_G5",
+   "note F#5 (transposed -1 semitones)"
+  ],
+  [
+   "chime_F#5",
+   "note F#5"
+  ]
+ ],
+ "sfx/notes/r3_n4.ogg": [
+  [
+   "harp_G5",
+   "note A5 (transposed +2 semitones)"
+  ],
+  [
+   "chime_G#5",
+   "note A5 (transposed +1 semitones)"
+  ]
+ ],
+ "sfx/notes/r4_n2.ogg": [
+  [
+   "harp_C5",
+   "note D5 (transposed +2 semitones)"
+  ],
+  [
+   "chime_D5",
+   "note D5"
+  ]
+ ],
+ "sfx/notes/r4_n3.ogg": [
+  [
+   "harp_E5",
+   "note E5"
+  ],
+  [
+   "chime_E5",
+   "note E5"
+  ]
+ ],
+ "sfx/notes/r4_n4.ogg": [
+  [
+   "harp_A4",
+   "note Ab4 (transposed -1 semitones)"
+  ],
+  [
+   "harp_E5",
+   "note Eb5 (transposed -1 semitones)"
+  ],
+  [
+   "harp_G5",
+   "note Ab5 (transposed +1 semitones)"
+  ]
+ ],
+ "sfx/step/earth_1.ogg": [
+  [
+   "k_step0",
+   "trimmed, low-pass 6 kHz"
+  ]
+ ],
+ "sfx/step/earth_2.ogg": [
+  [
+   "k_step1",
+   "trimmed, low-pass 6 kHz"
+  ]
+ ],
+ "sfx/step/earth_3.ogg": [
+  [
+   "k_step2",
+   "trimmed, low-pass 6 kHz"
+  ]
+ ],
+ "sfx/step/earth_4.ogg": [
+  [
+   "k_step3",
+   "trimmed, low-pass 6 kHz"
+  ]
+ ],
+ "sfx/step/earth_5.ogg": [
+  [
+   "k_step4",
+   "trimmed, low-pass 6 kHz"
+  ]
+ ],
+ "sfx/step/grass_1.ogg": [
+  [
+   "k_grass0",
+   "trimmed to the step, low-pass 8 kHz"
+  ]
+ ],
+ "sfx/step/grass_2.ogg": [
+  [
+   "k_grass1",
+   "trimmed to the step, low-pass 8 kHz"
+  ]
+ ],
+ "sfx/step/grass_3.ogg": [
+  [
+   "k_grass2",
+   "trimmed to the step, low-pass 8 kHz"
+  ]
+ ],
+ "sfx/step/grass_4.ogg": [
+  [
+   "k_grass3",
+   "trimmed to the step, low-pass 8 kHz"
+  ]
+ ],
+ "sfx/step/grass_5.ogg": [
+  [
+   "k_grass4",
+   "trimmed to the step, low-pass 8 kHz"
+  ]
+ ],
+ "sfx/step/soft_1.ogg": [
+  [
+   "k_carpet0",
+   "trimmed, low-pass 2.5 kHz (a soft, springy cap)"
+  ]
+ ],
+ "sfx/step/soft_2.ogg": [
+  [
+   "k_carpet1",
+   "trimmed, low-pass 2.5 kHz (a soft, springy cap)"
+  ]
+ ],
+ "sfx/step/soft_3.ogg": [
+  [
+   "k_carpet2",
+   "trimmed, low-pass 2.5 kHz (a soft, springy cap)"
+  ]
+ ],
+ "sfx/step/soft_4.ogg": [
+  [
+   "k_carpet3",
+   "trimmed, low-pass 2.5 kHz (a soft, springy cap)"
+  ]
+ ],
+ "sfx/step/stone_1.ogg": [
+  [
+   "k_concrete0",
+   "trimmed, low-pass 7 kHz, short synthetic room added"
+  ]
+ ],
+ "sfx/step/stone_2.ogg": [
+  [
+   "k_concrete1",
+   "trimmed, low-pass 7 kHz, short synthetic room added"
+  ]
+ ],
+ "sfx/step/stone_3.ogg": [
+  [
+   "k_concrete2",
+   "trimmed, low-pass 7 kHz, short synthetic room added"
+  ]
+ ],
+ "sfx/step/stone_4.ogg": [
+  [
+   "k_concrete3",
+   "trimmed, low-pass 7 kHz, short synthetic room added"
+  ]
+ ],
+ "sfx/step/stone_5.ogg": [
+  [
+   "k_concrete4",
+   "trimmed, low-pass 7 kHz, short synthetic room added"
+  ]
+ ],
+ "sfx/step/wet_1.ogg": [
+  [
+   "k_concrete0",
+   "trimmed, low-pass 7 kHz, puddle splash layered, short room"
+  ],
+  [
+   "puddle",
+   "small splash layered under the step, low-pass 6 kHz"
+  ]
+ ],
+ "sfx/step/wet_2.ogg": [
+  [
+   "k_concrete1",
+   "trimmed, low-pass 7 kHz, puddle splash layered, short room"
+  ],
+  [
+   "puddle",
+   "small splash layered under the step, low-pass 6 kHz"
+  ]
+ ],
+ "sfx/step/wet_3.ogg": [
+  [
+   "k_concrete2",
+   "trimmed, low-pass 7 kHz, puddle splash layered, short room"
+  ],
+  [
+   "puddle",
+   "small splash layered under the step, low-pass 6 kHz"
+  ]
+ ],
+ "sfx/step/wet_4.ogg": [
+  [
+   "k_concrete3",
+   "trimmed, low-pass 7 kHz, puddle splash layered, short room"
+  ],
+  [
+   "puddle",
+   "small splash layered under the step, low-pass 6 kHz"
+  ]
+ ],
+ "sfx/step/wood_1.ogg": [
+  [
+   "k_wood0",
+   "trimmed, high-pass 70 Hz, low-pass 6 kHz"
+  ]
+ ],
+ "sfx/step/wood_2.ogg": [
+  [
+   "k_wood1",
+   "trimmed, high-pass 70 Hz, low-pass 6 kHz"
+  ]
+ ],
+ "sfx/step/wood_3.ogg": [
+  [
+   "k_wood2",
+   "trimmed, high-pass 70 Hz, low-pass 6 kHz"
+  ]
+ ],
+ "sfx/step/wood_4.ogg": [
+  [
+   "k_wood3",
+   "trimmed, high-pass 70 Hz, low-pass 6 kHz"
+  ]
+ ],
+ "sfx/step/wood_5.ogg": [
+  [
+   "k_wood4",
+   "trimmed, high-pass 70 Hz, low-pass 6 kHz"
+  ]
+ ],
+ "sfx/world/arrive_1.ogg": [
+  [
+   "harp_F4",
+   "note G4 (transposed +2 semitones)"
+  ],
+  [
+   "harp_C5",
+   "note C5"
+  ],
+  [
+   "vibes_C5",
+   "note C5"
+  ],
+  [
+   "vibes_E5",
+   "note Eb5 (transposed -1 semitones)"
+  ],
+  [
+   "bowed_G3",
+   "note G3"
+  ],
+  [
+   "harp_A4",
+   "note A4"
+  ],
+  [
+   "harp_C5",
+   "note D5 (transposed +2 semitones)"
+  ],
+  [
+   "harp_G5",
+   "note F#5 (transposed -1 semitones)"
+  ],
+  [
+   "harp_C5",
+   "note C5"
+  ],
+  [
+   "harp_G5",
+   "note G5"
+  ]
+ ],
+ "sfx/world/arrive_2.ogg": [],
+ "sfx/world/arrive_3.ogg": [],
+ "sfx/world/arrive_4.ogg": [],
+ "sfx/world/brazier.ogg": [
+  [
+   "torch",
+   "full ignition"
+  ],
+  [
+   "campfire",
+   "4-6 s, band-pass 300 Hz-6 kHz, faded"
+  ]
+ ],
+ "sfx/world/checkpoint.ogg": [
+  [
+   "k_latch",
+   "lantern latch, low-pass 7 kHz"
+  ],
+  [
+   "torch",
+   "transposed up 6 semitones (a small flame)"
+  ]
+ ],
+ "sfx/world/complete.ogg": [
+  [
+   "harp_G3",
+   "note Ab3 (transposed +1 semitones)"
+  ],
+  [
+   "harp_D4",
+   "note Eb4 (transposed +1 semitones)"
+  ],
+  [
+   "harp_A4",
+   "note Ab4 (transposed -1 semitones)"
+  ],
+  [
+   "harp_C5",
+   "note C5"
+  ],
+  [
+   "harp_E5",
+   "note Eb5 (transposed -1 semitones)"
+  ],
+  [
+   "harp_G5",
+   "note Ab5 (transposed +1 semitones)"
+  ],
+  [
+   "tubular_C4",
+   "transposed down 4 semitones to A-flat"
+  ],
+  [
+   "chime_G#5",
+   "note G#5"
+  ]
+ ],
+ "sfx/world/edge_gust.ogg": [
+  [
+   "wind_gusts",
+   "4-8.5 s (one gust), low-pass 5 kHz, faded"
+  ],
+  [
+   "rope",
+   "0-2.2 s, low-pass 5 kHz"
+  ]
+ ],
+ "sfx/world/exit.ogg": [
+  [
+   "whoosh",
+   "reversed (swells instead of fading), low-pass 6 kHz"
+  ],
+  [
+   "marktree_slow_up",
+   "0-1.6 s"
+  ]
+ ],
+ "sfx/world/gate_1.ogg": [
+  [
+   "harp_C5",
+   "note C5"
+  ],
+  [
+   "harp_E5",
+   "note E5"
+  ],
+  [
+   "harp_G5",
+   "note G5"
+  ],
+  [
+   "harp_B5",
+   "note C6 (transposed +1 semitones)"
+  ],
+  [
+   "chime_F#5",
+   "note G5 (transposed +1 semitones)"
+  ],
+  [
+   "marktree_slow_down",
+   "0-2.5 s"
+  ],
+  [
+   "stone_lid",
+   "0.4-2.4 s, low-pass 2.5 kHz (the slab sinking)"
+  ],
+  [
+   "vibes_C5",
+   "note C5"
+  ],
+  [
+   "vibes_E5",
+   "note Eb5 (transposed -1 semitones)"
+  ],
+  [
+   "vibes_E5",
+   "note G5 (transposed +3 semitones)"
+  ],
+  [
+   "bowed_G3",
+   "note G3"
+  ],
+  [
+   "harp_C5",
+   "note D5 (transposed +2 semitones)"
+  ],
+  [
+   "harp_G5",
+   "note F#5 (transposed -1 semitones)"
+  ],
+  [
+   "harp_G5",
+   "note A5 (transposed +2 semitones)"
+  ],
+  [
+   "harp_D6",
+   "note D6"
+  ],
+  [
+   "marktree_random",
+   "1-3.2 s (wisteria parting)"
+  ],
+  [
+   "tubular_C4",
+   "transposed down 4 semitones to A-flat, faded"
+  ],
+  [
+   "harp_A4",
+   "note Ab4 (transposed -1 semitones)"
+  ],
+  [
+   "harp_C5",
+   "note C5"
+  ],
+  [
+   "harp_E5",
+   "note Eb5 (transposed -1 semitones)"
+  ],
+  [
+   "harp_G5",
+   "note Ab5 (transposed +1 semitones)"
+  ],
+  [
+   "marktree_slow_up",
+   "0-3 s"
+  ]
+ ],
+ "sfx/world/gate_2.ogg": [],
+ "sfx/world/gate_3.ogg": [],
+ "sfx/world/gate_4.ogg": [],
+ "sfx/world/hazard.ogg": [
+  [
+   "gong",
+   "0-5 s, transposed down 4 semitones, low-pass 900 Hz, slow fade-in so it never strikes"
+  ],
+  [
+   "whoosh",
+   "transposed down 7 semitones, low-pass 2.5 kHz"
+  ]
+ ],
+ "sfx/world/key.ogg": [
+  [
+   "belltree",
+   "full stroke"
+  ],
+  [
+   "harp_G5",
+   "note G5"
+  ],
+  [
+   "harp_B5",
+   "note C6 (transposed +1 semitones)"
+  ]
+ ],
+ "sfx/world/lantern_1.ogg": [
+  [
+   "torch",
+   "transposed up 7 semitones"
+  ],
+  [
+   "harp_C5",
+   "note C5"
+  ],
+  [
+   "chime_C5",
+   "note C5"
+  ]
+ ],
+ "sfx/world/lantern_2.ogg": [
+  [
+   "torch",
+   "transposed up 7 semitones"
+  ],
+  [
+   "harp_E5",
+   "note Eb5 (transposed -1 semitones)"
+  ],
+  [
+   "chime_D5",
+   "note Eb5 (transposed +1 semitones)"
+  ]
+ ],
+ "sfx/world/lantern_3.ogg": [
+  [
+   "torch",
+   "transposed up 7 semitones"
+  ],
+  [
+   "harp_G5",
+   "note Ab5 (transposed +1 semitones)"
+  ],
+  [
+   "chime_G#5",
+   "note Ab5"
+  ]
+ ],
+ "sfx/world/passage.ogg": [
+  [
+   "brook",
+   "2.0 s, high-pass 300 Hz, low-pass 6 kHz, faded"
+  ],
+  [
+   "marktree_up",
+   "0.05-2.0 s"
+  ],
+  [
+   "whoosh",
+   "transposed up 2 semitones"
+  ]
+ ],
+ "sfx/world/pier.ogg": [
+  [
+   "stone_slab",
+   "3-4.6 s, low-pass 1.2 kHz, faded (the pier rising from the mist)"
+  ]
+ ],
+ "sfx/world/plank_1.ogg": [
+  [
+   "k_plank0",
+   "trimmed, low-pass 4 kHz"
+  ]
+ ],
+ "sfx/world/plank_2.ogg": [
+  [
+   "k_plank1",
+   "trimmed, low-pass 4 kHz"
+  ]
+ ],
+ "sfx/world/plank_3.ogg": [
+  [
+   "k_plank2",
+   "trimmed, low-pass 4 kHz"
+  ]
+ ],
+ "sfx/world/plank_4.ogg": [
+  [
+   "k_plank3",
+   "trimmed, low-pass 4 kHz"
+  ]
+ ],
+ "sfx/world/plank_5.ogg": [
+  [
+   "k_plank4",
+   "trimmed, low-pass 4 kHz"
+  ]
+ ],
+ "sfx/world/repair.ogg": [
+  [
+   "marktree_slow_up",
+   "0-3.6 s"
+  ],
+  [
+   "bowed_A4",
+   "note Ab4 (transposed -1 semitones)"
+  ],
+  [
+   "harp_A4",
+   "note Ab4 (transposed -1 semitones)"
+  ]
+ ],
+ "sfx/world/rope.ogg": [
+  [
+   "rope",
+   "2.4-3.6 s, low-pass 5 kHz (the rails drawn tight)"
+  ]
+ ]
+}

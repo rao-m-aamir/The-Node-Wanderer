@@ -591,7 +591,9 @@ void bakeForest(RegionArt& art, const World& world) {
         int height = 8 + (int)(fbm2(x * 0.03f, 0.0f, 900, 3) * 18.0f);
         for (int y = CANVAS_HEIGHT - height; y < CANVAS_HEIGHT; y++) front.set(x, y, FERN[(y == CANVAS_HEIGHT - height) ? 2 : 0]);
     }
-    const float trunkX[2] = {6.0f, (float)front.width - 40.0f};
+    // Each sits as far in from its end as the other, so at the end of the path the right one frames
+    // the exit arch instead of standing in front of it.
+    const float trunkX[2] = {6.0f, (float)front.width - 6.0f};
     for (int i = 0; i < 2; i++) paintTrunk(front, trunkX[i], -10.0f, (float)CANVAS_HEIGHT, 14.0f, 20.0f, FERN, 4, TO_SUN, 950 + i);
     storeLayer(art, front, FRONT_PARALLAX, 0, true);
     for (int i = 0; i * 64 < front.width; i++) {
@@ -682,17 +684,20 @@ void drawForestBackground(const SceneView& view, const RegionArt& art) {
     drawBackLayers(view, art, MID_LAYER, NEAR_LAYER, 1.0f);
     DrawRectangleGradientV(0, 200, CANVAS_WIDTH, 100, withAlpha(MIST, 0.0f), withAlpha(MIST, 0.16f));
     DrawRectangle(0, 300, CANVAS_WIDTH, CANVAS_HEIGHT - 300, withAlpha(MIST, 0.16f));
-    drawBackLayers(view, art, NEAR_LAYER, LAYER_COUNT, 1.1f);
+    drawBackLayers(view, art, NEAR_LAYER, CANOPY_LAYER, 1.1f);
 
-    // Vines hanging from the canopy, swaying with the gusts that move the leaves.
+    // Vines hanging from the canopy, swaying with the gusts that move the leaves. They are drawn just
+    // behind the canopy and start well up inside it, so each one comes out of the leaves instead of
+    // starting in the open air below them.
     for (int i = 0; i < 18; i++) {
         float lx = i * 56.0f - 10.0f + hash01(i * 13 + 1) * 18.0f;
         int x = (int)layerToScreen(lx, view.scroll, PARALLAX[CANOPY_LAYER]);
         if (x < -10 || x > CANVAS_WIDTH + 10 || i % 3 == 1) continue;
-        int length = 24 + (int)(hash01(i * 47 + 5) * 54.0f);
+        int length = 34 + (int)(hash01(i * 47 + 5) * 54.0f);
         float lean = windAt(lx, time - 0.2f, 1.1f) * 4.0f;
-        drawStrand(x, 14 + (int)(hash01(i * 19 + 2) * 10.0f), length, CANOPY[3], MOSS[1], lean, i);
+        drawStrand(x, 4 + (int)(hash01(i * 19 + 2) * 10.0f), length, CANOPY[3], MOSS[1], lean, i);
     }
+    drawBackLayers(view, art, CANOPY_LAYER, LAYER_COUNT, 1.1f);
 }
 
 void drawForestPlatforms(const SceneView& view, const RegionArt& art) {
