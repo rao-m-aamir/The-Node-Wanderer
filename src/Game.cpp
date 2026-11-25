@@ -17,7 +17,9 @@ Game::Game() {
     player.size = Vector2{32.0f, 48.0f};
     player.facing = 1.0f;
 
-    // The whole world is drawn into a small canvas and scaled up 2x (pixel art).
+    // The whole world is drawn into a small canvas and scaled up 2x (pixel art), into a 1280x720
+    // frame that is shown in the window or full screen.
+    display.load();
     renderer.load();
 
     world.build();
@@ -46,23 +48,38 @@ void Game::startJourney() {
 // Every jump the route needs must be possible with the real movement code. A failure is reported
 // like a failed link check: in the console, and as an assert in debug builds.
 void Game::checkRouteJumps() const {
-    auto report = [](int region, const Node* from, const Node* to, bool ok) {
+    auto report = [](int region, int fromId, int toId, bool ok) {
         TraceLog(ok ? LOG_INFO : LOG_WARNING, "Jump check %s: Region %d N%d -> N%d", ok ? "OK" : "FAILED", region + 1,
-                 from->id, to->id);
+                 fromId, toId);
         assert(ok && "A jump on the route cannot be made");
     };
     for (int region = 0; region < REGION_COUNT; region++) {
-        const bool doubly = world.getRegion(region).kind == ListKind::Doubly;
+        const ListKind kind = world.getRegion(region).kind;
+        // Regions 5 and 6 create their nodes while you play, so their jumps are checked on the
+        // layout those nodes will have: each stone up to the next, each boat on to the next.
+        if (kind == ListKind::Stack) {
+            for (int id = 1; id < World::STONE_SLOTS; id++) {
+                report(region, id, id + 1, canJumpBetweenRects(world.getStoneSlot(id), world.getStoneSlot(id + 1), physics, player.size));
+            }
+            continue;
+        }
+        if (kind == ListKind::Queue) {
+            for (int id = 1; id < World::BOAT_SLOTS; id++) {
+                report(region, id, id + 1, canJumpBetweenRects(world.getBoatSlot(id), world.getBoatSlot(id + 1), physics, player.size));
+            }
+            continue;
+        }
+        const bool doubly = kind == ListKind::Doubly;
         Node* head = world.getHead(region);
         Node* node = head;
         int steps = 0;
         while (node != nullptr && steps < MAX_NODES_PER_REGION) {
             Node* next = node->next;
             if (next != nullptr && next != head) { // Region 3's tail -> head is the current, not a jump
-                report(region, node, next, canJumpBetween(*node, *next, physics, player.size));
+                report(region, node->id, next->id, canJumpBetween(*node, *next, physics, player.size));
             }
             if (doubly && node->previous != nullptr) { // Region 2 also needs the way back
-                report(region, node, node->previous, canJumpBetween(*node, *node->previous, physics, player.size));
+                report(region, node->id, node->previous->id, canJumpBetween(*node, *node->previous, physics, player.size));
             }
             node = next;
             steps++;
@@ -80,11 +97,44 @@ Game::~Game() {
 
     regionArt.clear();
     renderer.unload();
+    display.unload(); // before main closes the window
     audio.unload(); // every sound and stream, before main closes the audio device
 }
 
 bool Game::shouldQuit() const {
     return quitRequested;
+}
+
+// ---------------------------------------------------------------------------
+// Display
+// ---------------------------------------------------------------------------
+
+// F11 or Alt+Enter anywhere, or the pause screen's Screen row: exclusive fullscreen at the
+// resolution of the monitor the window is on, or back to the 1280x720 window.
+void Game::toggleFullscreen() {
+    display.setFullscreen(!display.isFullscreen());
+    audio.play(Sfx::Toggle);
+    if (state != GameState::Paused) {
+        showToast(display.isFullscreen() ? TextFormat("Fullscreen at %d x %d. F11 returns to the window.", display.width(), display.height())
+                                         : "Back in the window. F11 for fullscreen.",
+                  3.0f);
+    }
+}
+
+// The pause screen's rows: up and down choose one (music, sounds, mute, screen), left and right
+// (or E on the switches) change it.
+void Game::updatePauseSettings(const InputFrame& input) {
+    constexpr int ROWS = 4;
+    constexpr int SCREEN_ROW = 3;
+    if (input.navY != 0) {
+        settingsRow = (settingsRow + input.navY + ROWS) % ROWS;
+        audio.play(Sfx::Tick, 0.8f);
+    }
+    if (settingsRow == SCREEN_ROW) {
+        if (input.navX != 0 || input.interact) toggleFullscreen();
+        return;
+    }
+    updatePauseAudioPanel(input); // the sound rows (GameSound.cpp)
 }
 
 void Game::resetStage() {
@@ -125,6 +175,12 @@ void Game::enterRegion(int index) {
     calloutTimer = 0.0f;
     for (bool& visited : visitedIds) {
         visited = false;
+    }
+    for (float& at : createdAt) {
+        at = -100.0f; // the nodes that exist now were there all along: no arrival to show
+    }
+    for (RemovedPiece& piece : removedIds) {
+        piece = RemovedPiece{};
     }
 
     // Regions are separate lists. The player starts at the new list's head.
@@ -175,6 +231,22 @@ void Game::enterRegion(int index) {
                 "and find a way across to the far side.",
             }, NoteKind::Intro);
             break;
+        case 4:
+            showMessage({
+                "The Lighthouse Stair. Its old stair has fallen,\n"
+                "and the fog bell hangs at the top of the tower, out of reach.",
+                "Set stair stones one on top of another (E) and climb to the bell.\n"
+                "Then take them down again (S), top stone first, to the sea door.",
+            }, NoteKind::Intro);
+            break;
+        case 5:
+            showMessage({
+                "The Patient Harbor. The bell has called the boats,\n"
+                "and they come into the harbor one at a time.",
+                "Call a boat to the end of the line (E) and cross from boat to boat to the ship.\n"
+                "Each boat leaves once you step off it, in the order they came.",
+            }, NoteKind::Intro);
+            break;
         default:
             break;
     }
@@ -202,7 +274,7 @@ void Game::completeRegionObjective(const std::string& question, const std::strin
     pageKinds = {NoteKind::Question, NoteKind::Answer};
     pageIndex = 0;
     state = GameState::Message; // the exit's chord announces this note
-    const Sfx gates[REGION_COUNT] = {Sfx::Gate1, Sfx::Gate2, Sfx::Gate3, Sfx::Gate4};
+    const Sfx gates[REGION_COUNT] = {Sfx::Gate1, Sfx::Gate2, Sfx::Gate3, Sfx::Gate4, Sfx::Gate5, Sfx::Gate6};
     Rectangle gate;
     float side = world.getGateRect(regionIndex, gate) ? sideOf(gate.x + gate.width * 0.5f) : 0.0f;
     audio.play(gates[regionIndex], 1.0f, 1.0f, side, 0.3f);
@@ -214,12 +286,13 @@ void Game::completeRegionObjective(const std::string& question, const std::strin
 
 void Game::update(const InputFrame& input, float dt) {
     if (input.mute) toggleMute(); // works everywhere, also on the pause screen
+    if (input.fullscreen) toggleFullscreen(); // so does this (before drawing: the screen may change size)
     updateAudioMix(dt);
     audio.update(dt, state != GameState::Paused); // streams keep playing (ducked) while paused
 
     // Paused: the world and all of its clocks stand still until Esc resumes.
     if (state == GameState::Paused) {
-        updatePauseAudioPanel(input);
+        updatePauseSettings(input);
         if (input.pause) {
             state = stateBeforePause;
             audio.resumeWorld();
@@ -307,8 +380,9 @@ void Game::update(const InputFrame& input, float dt) {
                 audio.pauseWorld();
                 audio.play(Sfx::CoverClose);
             } else {
-                if (input.interact) tryBuildBridge();
-                if (state == GameState::Playing) updatePlaying(input, dt); // the bridge may have opened a note
+                if (input.interact) interact();
+                if (input.lower) tryPopStone();
+                if (state == GameState::Playing) updatePlaying(input, dt); // an interaction may have opened a note
             }
             break;
     }
@@ -369,6 +443,7 @@ void Game::updatePlaying(const InputFrame& input, float dt) {
         float impact = std::fmax(0.0f, std::fmin(1.0f, (fallSpeed - 200.0f) / 800.0f));
         audio.playStep(surfaceUnderfoot(), 0.8f + 0.5f * impact, side); // the surface it landed on
         if (impact > 0.3f) audio.play(Sfx::Land, 0.3f + 0.7f * impact, 1.0f, side); // only a real drop thuds
+        if (regionIndex == 4) checkObjectives(); // Region 5: set down on the stone under the one just popped
     }
     if (player.grounded) fallSoundPlayed = false;
     if (state != GameState::Playing) {
@@ -432,7 +507,7 @@ void Game::resolveLandings(float previousBottom) {
     Node* node = head;
     int steps = 0;
     while (node != nullptr && steps < MAX_NODES_PER_REGION) {
-        if (isPlatformSolid(player.currentNode, node, kind)) {
+        if (isPlatformSolid(player.currentNode, node, kind, head)) {
             Rectangle platform = getPlatformRect(*node);
             bool overlapsX = playerRect.x + playerRect.width > platform.x && playerRect.x < platform.x + platform.width;
             bool crossedTop = previousBottom <= platform.y + 1.0f && bottom >= platform.y;
@@ -458,8 +533,9 @@ void Game::resolveLandings(float previousBottom) {
     }
 }
 
-// Moves player.currentNode along a link. The destination must be exactly
-// current->next, or current->previous in a doubly linked list.
+// Moves player.currentNode along a link. The destination must be exactly current->next, or
+// current->previous in a doubly linked list. In a stack the only way up is onto the top: the
+// stone just pushed, whose next is the stone the traveler stands on.
 void Game::followLink(Node* destination) {
     Node* from = player.currentNode;
     if (from == nullptr || destination == nullptr) {
@@ -467,10 +543,11 @@ void Game::followLink(Node* destination) {
     }
 
     // The destination must be one of the current node's real links.
-    bool viaNext = from->next == destination; // current = current->next;
-    bool viaPrevious = !viaNext && world.getRegion(regionIndex).kind == ListKind::Doubly &&
-                       from->previous == destination; // current = current->previous;
-    if (!viaNext && !viaPrevious) {
+    const ListKind kind = world.getRegion(regionIndex).kind;
+    bool viaNext = kind != ListKind::Stack && from->next == destination; // current = current->next;
+    bool viaPrevious = !viaNext && kind == ListKind::Doubly && from->previous == destination; // current = current->previous;
+    bool ontoTop = kind == ListKind::Stack && destination == world.getHead(regionIndex) && destination->next == from; // current = top;
+    if (!viaNext && !viaPrevious && !ontoTop) {
         return; // not reachable through a permitted link: do not move
     }
 
@@ -478,8 +555,13 @@ void Game::followLink(Node* destination) {
     nodeTimer = 0.0f;
     markVisited(destination);
     spawnArrivalEffects(viaPrevious);
-    // Each link has a note in the place's key: rising along next, falling back along previous.
-    audio.playNote(regionIndex, destination->id, viaPrevious, sideOf(destination->platformPosition.x + destination->platformWidth / 2.0f));
+    if (ontoTop) {
+        checkpointNode = destination; // a fall returns the traveler to the top, the only stone that holds
+    } else {
+        // Each link has a note in the place's key: rising along next, falling back along previous.
+        // (On the stair the notes belong to push and pop instead.)
+        audio.playNote(regionIndex, destination->id, viaPrevious, sideOf(destination->platformPosition.x + destination->platformWidth / 2.0f));
+    }
     if (!journeyStarted) {
         journeyStarted = true; // the first step: the controls have done their job and fade out
         journeyTimer = 0.0f;
@@ -490,12 +572,15 @@ void Game::followLink(Node* destination) {
         showCallout(Callout::FollowPrevious);
     } else if (regionIndex == 2 && destination == loopStartNode) {
         showCallout(Callout::LoopBack); // tail->next is the head
-    } else {
+    } else if (!ontoTop) {
         showCallout(Callout::FollowNext);
     }
 
     if (regionIndex == 2 && !gateOpen) {
         loopSteps++; // only the first trip around counts; the stop condition already fired after that
+    }
+    if (kind == ListKind::Queue) {
+        leaveFrontBoat(from); // the boat stepped off was the front: it is the first to leave (`from` is deleted)
     }
     checkObjectives();
 }
@@ -601,9 +686,184 @@ void Game::checkObjectives() {
             }
             break;
 
+        case 4:
+            // Back on the floor stone after the bell: every stone has come off, the last one first.
+            if (stage == 1 && current->id == 1 && player.grounded) {
+                completeRegionObjective(
+                    "Journal question: you set the stones Wave, Shell, Gull, Bell.\n"
+                    "In what order did they come off?",
+                    "Answer: Bell, Gull, Shell, Wave. The last one set came off first.\n"
+                    "A stack adds and removes at one end, the top: last in, first out.\n"
+                    "The floor stone is the bottom, and its next is NULL. The sea door is open.");
+            }
+            break;
+
+        case 5:
+            if (current->id == World::BOAT_SLOTS) { // aboard the ship at the end of the line
+                completeRegionObjective(
+                    "Journal question: which boat was the first to leave the line?",
+                    "Answer: the Red Skiff, the first one that came. A queue adds at the rear\n"
+                    "and takes from the front: first in, first out. It keeps a pointer to each\n"
+                    "end, so neither one has to walk the line. The ship is ready to sail.");
+            }
+            break;
+
         default:
             break;
     }
+}
+
+// E: what it does depends on the place.
+void Game::interact() {
+    switch (regionIndex) {
+        case 3: tryBuildBridge(); break;
+        case 4: tryPushStone(); break;
+        case 5: tryCallBoat(); break;
+        default: break;
+    }
+}
+
+// Region 5: E sets the next stair stone on top of the stack with push(). A new stone can only go
+// on the top, so the traveler must be standing on it. On the highest stone, E rings the bell.
+void Game::tryPushStone() {
+    Node* current = player.currentNode;
+    Node* top = world.getHead(regionIndex);
+    if (current == nullptr || top == nullptr || !player.grounded) {
+        return; // not while jumping or dropping
+    }
+    if (stage == 0 && current == top && current->id == World::STONE_SLOTS) {
+        ringBell();
+        return;
+    }
+    if (stage != 0) {
+        showToast("The bell has rung. Take the stair down: press S.");
+        audio.play(Sfx::Tick);
+        return;
+    }
+    if (current != top) {
+        showToast("Climb onto the new stone first. Only the top takes a new one.");
+        audio.play(Sfx::Tick);
+        return;
+    }
+
+    Node* stone = world.pushStone(); // push(): stone->next = top; top = stone;
+    if (stone == nullptr) {
+        return;
+    }
+    noteCreated(*stone);
+    const float side = sideOf(stone->platformPosition.x + stone->platformWidth / 2.0f);
+    audio.play(Sfx::StonePush, 1.0f, 1.0f, side);
+    audio.playNote(regionIndex, stone->id, false, side); // each stone has its note, rising with the stair
+    spawnBurst(particles, Vector2{stone->platformPosition.x + 6.0f, stone->platformPosition.y + 10.0f}, 10, dustColor(),
+               Color{255, 236, 200, 255}, 60.0f, 80.0f, 0.7f); // grit shaken loose from the wall
+    showCallout(Callout::Push);
+}
+
+// Region 5: the highest stone stands under the fog bell.
+void Game::ringBell() {
+    setStage(1);
+    const Node* current = player.currentNode;
+    const float x = current->platformPosition.x + current->platformWidth * 0.72f;
+    audio.play(Sfx::Bell, 1.0f, 1.0f, sideOf(x));
+    spawnBurst(particles, Vector2{x, current->platformPosition.y - 62.0f}, 18, WARM_LIGHT, WHITE, 90.0f, 10.0f, 1.0f);
+    showToast("The bell rings out over the fog. Now take the stair down.", 5.0f);
+}
+
+// Region 5: S takes the top stone off the stack with pop(). The traveler is standing on it, so
+// they drop onto the stone under it, which is the new top. The floor stone is the bottom: its
+// next is NULL, and popping it would leave nothing to stand on.
+void Game::tryPopStone() {
+    if (regionIndex != 4) {
+        return;
+    }
+    Node* top = world.getHead(regionIndex);
+    if (top == nullptr || player.currentNode == nullptr || !player.grounded) {
+        return;
+    }
+    if (top->next == nullptr) {
+        showToast("This is the bottom stone. Under it there is only the sea.");
+        audio.play(Sfx::StoneStuck, 1.0f, 1.0f, sideOf(top->platformPosition.x + top->platformWidth / 2.0f));
+        showCallout(Callout::StackBottom);
+        return;
+    }
+
+    Node* below = top->next; // read the link before the top is deleted
+    const int id = top->id;
+    const Rectangle rect = getPlatformRect(*top);
+    const bool standingOnTop = player.currentNode == top;
+    // Every non-owning pointer leaves the top stone before pop() deletes it.
+    if (standingOnTop) player.currentNode = below;
+    if (checkpointNode == top) checkpointNode = below;
+    world.popStone(); // pop(): Node* old = top; top = top->next; delete old;
+    noteRemoved(id, rect);
+
+    const float side = sideOf(rect.x + rect.width / 2.0f);
+    audio.play(Sfx::StonePop, 1.0f, 1.0f, side);
+    audio.playNote(regionIndex, id, true, side); // the note it rose with, now on the way down
+    if (standingOnTop) {
+        player.grounded = false; // the stone has slid away: the traveler drops onto the new top
+        nodeTimer = 0.0f;
+        markVisited(below);
+        if (!journeyStarted) {
+            journeyStarted = true;
+            journeyTimer = 0.0f;
+        }
+    }
+    showCallout(Callout::Pop);
+}
+
+// Region 6: E calls the next boat to the end of the line with enqueue(). The queue keeps a pointer
+// to its rear, so this works from wherever the traveler stands.
+void Game::tryCallBoat() {
+    if (!world.boatsRemain()) {
+        showToast("The ship is the last in line. No more boats are coming.");
+        audio.play(Sfx::Tick);
+        return;
+    }
+    Node* boat = world.enqueueBoat(); // enqueue(): rear->next = boat; rear = boat;
+    if (boat == nullptr) {
+        return;
+    }
+    noteCreated(*boat);
+    const float side = sideOf(boat->platformPosition.x + boat->platformWidth / 2.0f);
+    audio.play(Sfx::BoatArrive, 1.0f, 1.0f, side);
+    audio.playNote(regionIndex, boat->id, false, side, BOAT_ARRIVE_SECONDS * 0.7f); // its note as it moors
+    showCallout(Callout::Enqueue);
+    if (boat->id == World::BOAT_SLOTS) {
+        showToast("The ship comes in at the end of the line.", 4.0f);
+    }
+}
+
+// Region 6: the traveler has stepped off the front boat, so it leaves the line with dequeue().
+void Game::leaveFrontBoat(Node* front) {
+    if (front == nullptr || front != world.getHead(regionIndex) || front == player.currentNode) {
+        return;
+    }
+    const int id = front->id;
+    const Rectangle rect = getPlatformRect(*front);
+    if (checkpointNode == front) checkpointNode = player.currentNode; // never keep a pointer to a node about to be deleted
+    world.dequeueBoat(); // dequeue(): Node* old = front; front = front->next; delete old;
+    noteRemoved(id, rect);
+
+    const float side = sideOf(rect.x + rect.width / 2.0f);
+    audio.play(Sfx::BoatLeave, 1.0f, 1.0f, side, 0.25f);
+    audio.playNote(regionIndex, id, true, side, 0.55f); // the note it came with, so the tune leaves in the order it came
+    showCallout(Callout::Dequeue);
+}
+
+// Presentation only: when nodes were created and which were just deleted, by ID.
+void Game::noteCreated(const Node& node) {
+    if (node.id < 0 || node.id > MAX_NODES_PER_REGION) return;
+    createdAt[node.id] = elapsed;
+    removedIds[node.id] = RemovedPiece{};
+    // A new node comes in already veiled or clear, so it never fades into mist after it arrives.
+    const ListKind kind = world.getRegion(regionIndex).kind;
+    ledgeMist[node.id] = isPlatformSolid(player.currentNode, &node, kind, world.getHead(regionIndex)) ? 0.0f : 1.0f;
+}
+
+void Game::noteRemoved(int id, Rectangle rect) {
+    if (id < 0 || id > MAX_NODES_PER_REGION) return;
+    removedIds[id] = RemovedPiece{true, rect, elapsed};
 }
 
 // Region 4 interaction: the safe check, then append() repairs the missing link.
@@ -659,6 +919,14 @@ void Game::recoverFromFall(bool movedBackward) {
     } else if (regionIndex == 2 && movedBackward) {
         recoveryPages.push_back("The garden flows one way. To reach an earlier terrace,\n"
                                 "keep going around the circle.");
+    } else if (regionIndex == 4) {
+        recoveryPages.push_back("You slipped off the stair. Only the top stone will hold you;\n"
+                                "the stones under it wait their turn.");
+    } else if (regionIndex == 5 && movedBackward) {
+        recoveryPages.push_back("The boat behind you has gone. In this line the boat at the front\n"
+                                "is always the first to leave.");
+    } else if (regionIndex == 5) {
+        recoveryPages.push_back("You slipped into the harbor. Only the boat ahead of you will hold.");
     } else {
         recoveryPages.push_back("You slipped into the mist. Only the ledges lit for you will hold.");
     }
@@ -733,6 +1001,8 @@ void Game::markVisited(const Node* node) {
 // How hard the wind blows in this region (for the traveler's scarf; the art has its own).
 float Game::regionWind() const {
     if (regionIndex == 3) return world.isBridgeBuilt() ? 0.7f : 1.6f;
+    if (regionIndex == 4) return 1.0f; // a sea breeze around the tower
+    if (regionIndex == 5) return 0.6f;
     return (regionIndex == 2) ? 0.5f : 0.8f;
 }
 
@@ -747,7 +1017,7 @@ void Game::updateLedgeMist(float dt) {
     int steps = 0;
     while (node != nullptr && steps < MAX_NODES_PER_REGION) {
         if (node->id >= 0 && node->id <= MAX_NODES_PER_REGION) {
-            float target = isPlatformSolid(player.currentNode, node, kind) ? 0.0f : 1.0f;
+            float target = isPlatformSolid(player.currentNode, node, kind, head) ? 0.0f : 1.0f;
             ledgeMist[node->id] += (target - ledgeMist[node->id]) * follow;
         }
         node = node->next;
@@ -766,6 +1036,9 @@ void Game::updateCamera(float dt) {
         lean = (toward->platformPosition.x + toward->platformWidth / 2.0f - center) * 0.35f;
     } else if (gateOpen && world.getGateRect(regionIndex, gate)) {
         lean = (gate.x + gate.width / 2.0f - center) * 0.35f;
+    } else if (regionIndex == 5 && world.boatsRemain() && world.getQueueRear() != nullptr) {
+        Rectangle slot = world.getBoatSlot(world.getQueueRear()->id + 1); // at the rear: look out to where the next boat comes in
+        lean = (slot.x + slot.width / 2.0f - center) * 0.35f;
     }
     lean = std::fmax(-220.0f, std::fmin(220.0f, lean));
     float desired = center + lean - SCREEN_WIDTH / 2.0f;
@@ -809,6 +1082,8 @@ Color Game::dustColor() const {
         case 0: return Color{150, 124, 92, 255};  // forest earth
         case 1: return Color{150, 160, 182, 255}; // stone dust
         case 2: return Color{204, 186, 232, 255}; // pollen
+        case 4: return Color{222, 210, 186, 255}; // sandstone grit
+        case 5: return Color{226, 240, 246, 255}; // spray
         default: return Color{150, 150, 162, 255}; // grit
     }
 }
@@ -822,6 +1097,8 @@ void Game::spawnArrivalEffects(bool viaPrevious) {
         case 0: first = Color{184, 226, 112, 255}; second = WARM_LIGHT; break;
         case 1: first = viaPrevious ? COOL_LIGHT : WARM_LIGHT; second = viaPrevious ? WHITE : Color{184, 192, 204, 255}; break;
         case 2: first = Color{255, 150, 210, 255}; second = Color{120, 255, 230, 255}; break;
+        case 4: first = Color{246, 232, 200, 255}; second = WARM_LIGHT; break;
+        case 5: first = Color{236, 248, 255, 255}; second = Color{150, 222, 230, 255}; break;
         default: first = WARM_LIGHT; second = Color{164, 164, 172, 255}; break;
     }
     spawnBurst(particles, playerFeet(), 10, first, second, 90.0f, 160.0f, 0.7f);

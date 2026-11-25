@@ -15,7 +15,9 @@ const RegionPainter& painterFor(int region) {
         case 0: return FOREST_PAINTER;
         case 1: return RUINS_PAINTER;
         case 2: return GARDEN_PAINTER;
-        default: return EDGE_PAINTER;
+        case 3: return EDGE_PAINTER;
+        case 4: return LIGHTHOUSE_PAINTER;
+        default: return HARBOR_PAINTER;
     }
 }
 
@@ -35,6 +37,7 @@ void RegionArt::clear() {
     sway.clear();
     ledges.clear();
     extra.clear();
+    spots.clear();
     waterline = -1;
     region = -1;
 }
@@ -90,6 +93,23 @@ void storeLedge(RegionArt& art, const Node& node, const LedgeCanvas& c) {
     ledge.dx = -c.originX;
     ledge.dy = -c.originY;
     art.ledges.push_back(ledge);
+}
+
+void storeLedgeById(RegionArt& art, int nodeId, const LedgeCanvas& c) {
+    LedgeArt ledge;
+    ledge.nodeId = nodeId;
+    ledge.picture = c.picture.upload();
+    ledge.mask = c.picture.uploadMask();
+    ledge.dx = -c.originX;
+    ledge.dy = -c.originY;
+    art.ledges.push_back(ledge);
+}
+
+const LedgeArt* findLedgeArt(const RegionArt& art, int nodeId) {
+    for (const LedgeArt& ledge : art.ledges) {
+        if (ledge.nodeId == nodeId) return &ledge;
+    }
+    return nullptr;
 }
 
 void storeLayer(RegionArt& art, const Picture& picture, float parallax, int y, bool front) {

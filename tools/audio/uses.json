@@ -53,6 +53,30 @@
    "the mix looped: section 49.6-152.2 s of the recording with a 5 s crossfade"
   ]
  ],
+ "ambience/harbor.ogg": [
+  [
+   "harbour",
+   "high-pass 80 Hz"
+  ],
+  [
+   "harbour",
+   "section 20.1-150.0 s looped with a 6 s crossfade"
+  ]
+ ],
+ "ambience/lighthouse.ogg": [
+  [
+   "cliff_sea",
+   "high-pass 70 Hz; the biggest breakers turned down by a gentle peak limiter"
+  ],
+  [
+   "pine_breeze",
+   "high-pass 1.5 kHz, looped (5 s crossfade) and repeated over the surf, -14 dB"
+  ],
+  [
+   "cliff_sea",
+   "the mix looped: section 6.0-161.4 s with a 6 s crossfade"
+  ]
+ ],
  "ambience/ruins.ogg": [
   [
    "cave_drips",
@@ -99,6 +123,18 @@
   [
    "reverie",
    "section 8.00-200.60 s, the last 6 s crossfaded into the start (seamless loop); resampled to 48000 Hz; loudness set to -21 LUFS"
+  ]
+ ],
+ "music/harbor.ogg": [
+  [
+   "home_was_you",
+   "section 75.70-206.50 s, the last 7 s crossfaded into the start (seamless loop); resampled to 48000 Hz; loudness set to -21 LUFS"
+  ]
+ ],
+ "music/lighthouse.ogg": [
+  [
+   "solace",
+   "section 22.30-320.60 s, the last 7 s crossfaded into the start (seamless loop); resampled to 48000 Hz; loudness set to -21 LUFS"
   ]
  ],
  "music/ruins.ogg": [
@@ -171,6 +207,24 @@
   [
    "echo_drips",
    "one drip at 58.02 s with its echo, low-pass 8 kHz"
+  ]
+ ],
+ "sfx/accent/gull_1.ogg": [
+  [
+   "gull_pair",
+   "0.2-3.6 s, band-pass 500 Hz-5 kHz, distant room"
+  ]
+ ],
+ "sfx/accent/gull_2.ogg": [
+  [
+   "gull_flying",
+   "0.5-4.0 s, band-pass 500 Hz-5 kHz, distant room"
+  ]
+ ],
+ "sfx/accent/gull_3.ogg": [
+  [
+   "gull_call",
+   "8.5-10.4 s, band-pass 500 Hz-5 kHz, distant room"
   ]
  ],
  "sfx/accent/pebbles_1.ogg": [
@@ -505,6 +559,128 @@
    "note Ab5 (transposed +1 semitones)"
   ]
  ],
+ "sfx/notes/r5_n2.ogg": [
+  [
+   "harp_C5",
+   "note D5 (transposed +2 semitones)"
+  ],
+  [
+   "chime_D5",
+   "note D5"
+  ]
+ ],
+ "sfx/notes/r5_n3.ogg": [
+  [
+   "harp_E5",
+   "note F5 (transposed +1 semitones)"
+  ],
+  [
+   "chime_E5",
+   "note F5 (transposed +1 semitones)"
+  ]
+ ],
+ "sfx/notes/r5_n4.ogg": [
+  [
+   "harp_G5",
+   "note A5 (transposed +2 semitones)"
+  ],
+  [
+   "chime_G#5",
+   "note A5 (transposed +1 semitones)"
+  ]
+ ],
+ "sfx/notes/r5_n5.ogg": [
+  [
+   "harp_D6",
+   "note D6"
+  ],
+  [
+   "chime_C6",
+   "note D6 (transposed +2 semitones)"
+  ]
+ ],
+ "sfx/notes/r6_n1.ogg": [
+  [
+   "harp_C5",
+   "note C5"
+  ],
+  [
+   "chime_C5",
+   "note C5"
+  ]
+ ],
+ "sfx/notes/r6_n2.ogg": [
+  [
+   "harp_C5",
+   "note D5 (transposed +2 semitones)"
+  ],
+  [
+   "chime_D5",
+   "note D5"
+  ]
+ ],
+ "sfx/notes/r6_n3.ogg": [
+  [
+   "harp_E5",
+   "note E5"
+  ],
+  [
+   "chime_E5",
+   "note E5"
+  ]
+ ],
+ "sfx/notes/r6_n4.ogg": [
+  [
+   "harp_G5",
+   "note G5"
+  ],
+  [
+   "chime_F#5",
+   "note G5 (transposed +1 semitones)"
+  ]
+ ],
+ "sfx/notes/r6_n5.ogg": [
+  [
+   "harp_G5",
+   "note A5 (transposed +2 semitones)"
+  ],
+  [
+   "chime_G#5",
+   "note A5 (transposed +1 semitones)"
+  ]
+ ],
+ "sfx/notes/r6_n6.ogg": [
+  [
+   "harp_B5",
+   "note C6 (transposed +1 semitones)"
+  ],
+  [
+   "chime_C6",
+   "note C6"
+  ]
+ ],
+ "sfx/notes/r6_n7.ogg": [
+  [
+   "harp_C5",
+   "note C5"
+  ],
+  [
+   "harp_G5",
+   "note G5"
+  ],
+  [
+   "harp_B5",
+   "note C6 (transposed +1 semitones)"
+  ],
+  [
+   "harp_F6",
+   "note E6 (transposed -1 semitones)"
+  ],
+  [
+   "chime_C6",
+   "note C6"
+  ]
+ ],
  "sfx/step/earth_1.ogg": [
   [
    "k_step0",
@@ -729,11 +905,87 @@
   [
    "harp_G5",
    "note G5"
+  ],
+  [
+   "harp_C5",
+   "note D5 (transposed +2 semitones)"
+  ],
+  [
+   "harp_G5",
+   "note A5 (transposed +2 semitones)"
+  ],
+  [
+   "tubular_D3_soft",
+   "faded (a fog bell far off)"
+  ],
+  [
+   "harp_F4",
+   "note G4 (transposed +2 semitones)"
+  ],
+  [
+   "harp_C5",
+   "note C5"
+  ],
+  [
+   "harp_E5",
+   "note E5"
   ]
  ],
  "sfx/world/arrive_2.ogg": [],
  "sfx/world/arrive_3.ogg": [],
  "sfx/world/arrive_4.ogg": [],
+ "sfx/world/arrive_5.ogg": [],
+ "sfx/world/arrive_6.ogg": [],
+ "sfx/world/bell.ogg": [
+  [
+   "tubular_D3",
+   "full stroke (D)"
+  ],
+  [
+   "tubular_D3_soft",
+   "softer second stroke"
+  ],
+  [
+   "tubular_D4",
+   "an octave above, under the stroke"
+  ],
+  [
+   "gong",
+   "0-6 s, transposed down 2 semitones, low-pass 700 Hz, under the bell"
+  ]
+ ],
+ "sfx/world/boat_arrive.ogg": [
+  [
+   "k_knock0",
+   "wooden knock, low-pass 2.5 kHz (the hull against the post)"
+  ],
+  [
+   "puddle",
+   "low-pass 2.5 kHz (water slapping the hull)"
+  ],
+  [
+   "paddles",
+   "16.95-17.65 s, low-pass 6 kHz (a stroke)"
+  ],
+  [
+   "paddles",
+   "18.80-19.50 s, low-pass 6 kHz (a second stroke)"
+  ]
+ ],
+ "sfx/world/boat_leave.ogg": [
+  [
+   "paddles",
+   "20.70-21.40 s, low-pass 6 kHz (a stroke)"
+  ],
+  [
+   "paddles",
+   "24.33-25.03 s, low-pass 3.5 kHz (farther)"
+  ],
+  [
+   "paddles",
+   "26.80-27.50 s, low-pass 2.2 kHz (farther still)"
+  ]
+ ],
  "sfx/world/brazier.ogg": [
   [
    "torch",
@@ -896,11 +1148,73 @@
   [
    "marktree_slow_up",
    "0-3 s"
+  ],
+  [
+   "k_latch",
+   "door latch, low-pass 6 kHz"
+  ],
+  [
+   "rope",
+   "0.2-1.8 s, transposed down 3 semitones, low-pass 3 kHz (the door swinging)"
+  ],
+  [
+   "harp_C5",
+   "note D5 (transposed +2 semitones)"
+  ],
+  [
+   "harp_E5",
+   "note F5 (transposed +1 semitones)"
+  ],
+  [
+   "harp_G5",
+   "note A5 (transposed +2 semitones)"
+  ],
+  [
+   "harp_D6",
+   "note D6"
+  ],
+  [
+   "tubular_D4",
+   "faded (the fog bell, far above)"
+  ],
+  [
+   "k_latch",
+   "door latch, low-pass 6 kHz"
+  ],
+  [
+   "tubular_C5",
+   "two strokes (the ship's bell)"
+  ],
+  [
+   "tubular_C5",
+   "second stroke, softer"
+  ],
+  [
+   "harp_C5",
+   "note C5"
+  ],
+  [
+   "harp_E5",
+   "note E5"
+  ],
+  [
+   "harp_G5",
+   "note G5"
+  ],
+  [
+   "harp_B5",
+   "note C6 (transposed +1 semitones)"
+  ],
+  [
+   "marktree_slow_down",
+   "0-2.5 s"
   ]
  ],
  "sfx/world/gate_2.ogg": [],
  "sfx/world/gate_3.ogg": [],
  "sfx/world/gate_4.ogg": [],
+ "sfx/world/gate_5.ogg": [],
+ "sfx/world/gate_6.ogg": [],
  "sfx/world/hazard.ogg": [
   [
    "gong",
@@ -1035,6 +1349,60 @@
   [
    "rope",
    "2.4-3.6 s, low-pass 5 kHz (the rails drawn tight)"
+  ]
+ ],
+ "sfx/world/stone_pop_1.ogg": [
+  [
+   "k_mining0",
+   "transposed down 5 semitones, low-pass 1.5 kHz (the stone seating)"
+  ],
+  [
+   "stone_slab",
+   "0.10-0.48 s, transposed -1 semitones, band-pass 150 Hz-4 kHz (the stone sliding in)"
+  ]
+ ],
+ "sfx/world/stone_pop_2.ogg": [
+  [
+   "k_mining1",
+   "transposed down 5 semitones, low-pass 1.5 kHz (the stone seating)"
+  ],
+  [
+   "stone_slab",
+   "2.10-2.48 s, transposed -1 semitones, band-pass 150 Hz-4 kHz (the stone sliding in)"
+  ]
+ ],
+ "sfx/world/stone_push_1.ogg": [
+  [
+   "k_thud0",
+   "soft heavy thud, low-pass 1.2 kHz"
+  ],
+  [
+   "stone_slab",
+   "5.25-5.67 s, transposed +3 semitones, band-pass 150 Hz-4 kHz (a stone sliding out)"
+  ]
+ ],
+ "sfx/world/stone_push_2.ogg": [
+  [
+   "k_thud1",
+   "soft heavy thud, low-pass 1.2 kHz"
+  ],
+  [
+   "stone_slab",
+   "6.05-6.47 s, transposed +3 semitones, band-pass 150 Hz-4 kHz (a stone sliding out)"
+  ]
+ ],
+ "sfx/world/stone_stuck.ogg": [
+  [
+   "k_mining2",
+   "transposed down 6 semitones, low-pass 1.4 kHz"
+  ],
+  [
+   "k_thud2",
+   "low-pass 900 Hz"
+  ],
+  [
+   "pebbles",
+   "1.2-1.8 s, low-pass 3 kHz (grit trickling)"
   ]
  ]
 }

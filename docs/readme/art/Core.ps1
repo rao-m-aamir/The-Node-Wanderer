@@ -278,8 +278,8 @@ $Gilt = '#deba6e'
 $WarmLight = '#ffde82'
 $CoolLight = '#96d2ff'
 $Hazard = '#ffaa32'
-$Accents = @('#96dc6e', '#82beff', '#bea0ff', '#ffba50')   # region accent, regions 1-4
-$RegionInks = @('#2e6c34', '#285296', '#6240a0', '#9e5e12') # region ink on parchment
+$Accents = @('#96dc6e', '#82beff', '#bea0ff', '#ffba50', '#ff9680', '#60dccc')   # region accent, regions 1-6
+$RegionInks = @('#2e6c34', '#285296', '#6240a0', '#9e5e12', '#aa3e32', '#127470') # region ink on parchment
 
 # The silhouette of a layer in one color, e.g. the mist veil over a platform.
 function Mask-Svg($layer, [string]$color, [string]$attrs = '') {

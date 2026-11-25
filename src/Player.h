@@ -63,5 +63,8 @@ float lanternSwing(const Player& player); // how far the lantern hangs to the si
 
 // Layout check: runs the real movement code to see whether the traveler can get from the top of
 // `from` onto the top of `to` (run to the nearer edge, jump, steer, and land with their middle
-// over `to`). Used at startup so every jump the route needs is known to be possible.
+// over `to`; a platform right overhead is jumped to from under its middle). Used at startup so
+// every jump the route needs is known to be possible.
 bool canJumpBetween(const Node& from, const Node& to, const PhysicsSettings& settings, Vector2 size);
+// The same check for platforms given by their layout (nodes that push() or enqueue() create later).
+bool canJumpBetweenRects(Rectangle from, Rectangle to, const PhysicsSettings& settings, Vector2 size);

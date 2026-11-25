@@ -10,7 +10,8 @@
 //      light sink into shadow;
 //   3. each light also glows on its own (added on top);
 //   4. the canvas is scaled up 2x through a small shader that adds bloom, a color grade, and
-//      a vignette. If the shader cannot be compiled, the canvas is shown without it.
+//      a vignette (into the 1280x720 frame, see Display.h). If the shader cannot be compiled,
+//      the canvas is shown without it.
 
 struct Light {
     Vector2 position;  // canvas pixels
@@ -42,7 +43,10 @@ public:
     // Call outside any texture mode.
     void renderLightMap(const std::vector<Light>& lights, const Mood& mood) const;
     void copyCanvasToReflection() const; // a still copy of the canvas so far, for water to reflect
-    void present(const Mood& mood, int screenWidth, int screenHeight) const;
+    void prepareBloom() const;           // the blurred copies of the finished canvas, for the bloom
+
+    // Call while drawing into the frame: the canvas, scaled to it, with bloom and the grade.
+    void present(const Mood& mood, int width, int height) const;
 
     // Call while drawing into the canvas.
     void applyLightMap() const;

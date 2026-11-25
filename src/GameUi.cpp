@@ -24,6 +24,8 @@ const char* const REGION_LINES[REGION_COUNT] = {
     "Every stone remembers the way back.",
     "Every path here returns to where it began.",
     "Look before you step.",
+    "The last stone set is the first to go.",
+    "The first to come is the first to go.",
 };
 
 // What each place teaches, in the journal's voice.
@@ -39,6 +41,16 @@ const char* const REGION_LESSONS[REGION_COUNT] = {
     "nullptr means there is no node. Following it is undefined\n"
     "behavior, so check first:\n"
     "if (current->next != nullptr) current = current->next;",
+    "A stack works at one end, the top: last in, first out.\n"
+    "push:  stone->next = top;  top = stone;\n"
+    "pop:   Node* old = top;  top = top->next;  delete old;\n"
+    "Check that top is not NULL before you pop.",
+    "A queue adds at the rear and takes from the front:\n"
+    "first in, first out. It keeps a pointer to each end.\n"
+    "enqueue:  if (rear == nullptr) front = boat;  else rear->next = boat;\n"
+    "          rear = boat;\n"
+    "dequeue:  Node* old = front;  front = front->next;  delete old;\n"
+    "          if (front == nullptr) rear = nullptr;",
 };
 
 struct CalloutText {
@@ -58,6 +70,16 @@ const CalloutText CALLOUTS[(int)Callout::Count] = {
      "There is no node past the edge. Check a link before you follow it."},
     {"append() added the bridge", "tail->next = newNode;",
      "N3's next points to a node now, so the bridge will hold."},
+    {"push() set a stone on top", "stone->next = top;  top = stone;",
+     "The new stone is the top now. Its next is the stone under it."},
+    {"pop() took the top stone off", "Node* old = top;  top = top->next;  delete old;",
+     "The last stone set is the first to go. The one under it is the top now."},
+    {"N1 is the bottom of the stack", "N1->next == nullptr",
+     "Pop it too and top would be NULL: an empty stack, with nothing to stand on."},
+    {"enqueue() called a boat to the rear", "rear->next = boat;  rear = boat;",
+     "The queue keeps a pointer to its rear, so adding never walks the line."},
+    {"dequeue() let the front boat go", "Node* old = front;  front = front->next;  delete old;",
+     "The boat that came first is the first to leave."},
 };
 
 // A key cap followed by an action, e.g. [TAB] journal. Returns the width used.
@@ -220,11 +242,26 @@ void drawRegionSketch(int region, float x, float y, Color ink) {
             }
             DrawCircleV(Vector2{x, y}, 3.0f, GILT);
             break;
-        default:
+        case 3:
             DrawRectangle((int)x - 14, (int)y, 28, 3, ink);
             DrawRectangle((int)x - 14, (int)y - 8, 2, 11, ink);
             DrawRectangle((int)x + 12, (int)y - 8, 2, 11, ink);
             for (int i = 0; i < 5; i++) DrawRectangle((int)x - 11 + i * 5, (int)y + 3, 3, 2, Fade(ink, 0.6f));
+            break;
+        case 4: // a stack of stones, the top one lighter
+            for (int i = 0; i < 4; i++) {
+                int w = 22 - i * 3;
+                DrawRectangleRounded(Rectangle{x - w / 2.0f + ((i % 2) ? 1.0f : -1.0f), y + 8.0f - i * 6.0f, (float)w, 5.0f}, 0.5f, 4,
+                                     (i == 3) ? Fade(ink, 0.55f) : ink);
+            }
+            break;
+        case 5: // a little boat with a sail
+            drawTriangleSafe(Vector2{x - 13.0f, y + 4.0f}, Vector2{x + 13.0f, y + 4.0f}, Vector2{x + 8.0f, y + 10.0f}, ink);
+            DrawRectangle((int)x - 13, (int)y + 4, 21, 6, ink);
+            DrawRectangle((int)x - 1, (int)y - 12, 2, 16, ink);
+            drawTriangleSafe(Vector2{x + 2.0f, y - 11.0f}, Vector2{x + 2.0f, y + 1.0f}, Vector2{x + 11.0f, y + 1.0f}, Fade(ink, 0.6f));
+            break;
+        default:
             break;
     }
 }
@@ -235,10 +272,18 @@ void drawRegionSketch(int region, float x, float y, Color ink) {
 // Frame layout
 // ---------------------------------------------------------------------------
 
+// The world is drawn off screen first (its canvas, light map, and bloom are texture passes of
+// their own); then the frame is composed in 1280x720 coordinates and shown in the window or
+// fullscreen (see Display.h).
 void Game::draw() const {
-    ClearBackground(BLACK);
-    drawScene();
+    const Mood mood = drawScene();
+    display.beginFrame();
+    renderer.present(mood, SCREEN_WIDTH, SCREEN_HEIGHT);
+    drawInterface();
+    display.endFrame();
+}
 
+void Game::drawInterface() const {
     // The interface for play sits under the fades, so it fades out and in with the scene
     // instead of switching to the next region's HUD while the screen is black.
     if (state != GameState::Complete) {
@@ -354,20 +399,45 @@ void Game::drawCallout() const {
     DrawText(text.line, (int)x, (int)card.y + 57, 10, Fade(INK, alpha));
 }
 
-// Region 4: a key hint above the traveler while standing on N3 with its NULL link.
+// A key hint above the traveler where the place has something to do: Region 4's NULL link on N3,
+// Region 5's stair (push, the bell, pop), and Region 6's rear boat (enqueue).
 void Game::drawInteractionPrompt() const {
     const Node* current = player.currentNode;
-    if (state != GameState::Playing || regionIndex != 3 || stage != 1 || current == nullptr || current->id != 3) {
+    if (state != GameState::Playing || current == nullptr || transitionTarget >= 0) {
         return;
     }
-    const char* key = inspectorOpen ? "E" : "TAB";
-    const char* action = inspectorOpen ? "mend the bridge" : "look at the way ahead";
+    const char* key = nullptr;
+    const char* action = nullptr;
+    Color color = REGION_STYLES[regionIndex].accent;
+    if (regionIndex == 3 && stage == 1 && current->id == 3) {
+        key = inspectorOpen ? "E" : "TAB";
+        action = inspectorOpen ? "mend the bridge" : "look at the way ahead";
+        color = NULL_AMBER;
+    } else if (regionIndex == 4 && !gateOpen && player.grounded && current == world.getHead(regionIndex)) {
+        if (stage == 0) {
+            key = "E";
+            action = (current->id == World::STONE_SLOTS) ? "ring the bell" : "set a stone on top";
+        } else if (current->next != nullptr) {
+            key = "S";
+            action = "take the top stone off";
+        }
+    } else if (regionIndex == 5 && !gateOpen && player.grounded && current->next == nullptr && world.boatsRemain()) {
+        key = "E";
+        action = "call a boat";
+    }
+    if (key == nullptr) {
+        return;
+    }
     float width = measureKeyHint(key, action) + 14.0f;
     float x = player.position.x + player.size.x / 2.0f - camera.target.x - width / 2.0f;
     float y = player.position.y - 34.0f;
+    if (regionIndex == 4) { // on the stair: beside the traveler, so the bell above stays in view
+        x = player.position.x + player.size.x + 14.0f - camera.target.x;
+        y = player.position.y + 6.0f;
+    }
     DrawRectangleRounded(Rectangle{x, y, width, 22.0f}, 0.4f, 4, Fade(UI_NAVY, 0.9f));
-    DrawRectangleRoundedLinesEx(Rectangle{x, y, width, 22.0f}, 0.4f, 4, 1.5f, NULL_AMBER);
-    drawKeyHint(key, action, x + 7.0f, y + 4.0f, UI_TEXT, OUTLINE_DARK, NULL_AMBER);
+    DrawRectangleRoundedLinesEx(Rectangle{x, y, width, 22.0f}, 0.4f, 4, 1.5f, color);
+    drawKeyHint(key, action, x + 7.0f, y + 4.0f, UI_TEXT, OUTLINE_DARK, color);
 }
 
 // Bottom left, small and quiet: the controls at the start of the journey. They fade out once
@@ -453,6 +523,8 @@ void Game::drawInspector() const {
     const Node* current = player.currentNode;
     bool isDoubly = region.kind == ListKind::Doubly;
     bool isCircular = region.kind == ListKind::Circular;
+    bool isStack = region.kind == ListKind::Stack;
+    bool isQueue = region.kind == ListKind::Queue;
     bool emphasizePrevious = regionIndex == 1 && stage == 1 && !gateOpen;
 
     // Build the "walk from head" line by reading the actual links.
@@ -477,7 +549,8 @@ void Game::drawInspector() const {
         if (next == nullptr) {
             count = addToken(tokens, count, capacity, "->", TokenStyle::Arrow);
             count = addToken(tokens, count, capacity, "NULL", TokenStyle::Null);
-            stopNote = "stopped: next == NULL (the end of the list)";
+            stopNote = isStack ? "stopped: next == NULL (the bottom of the stack)"
+                               : (isQueue ? "stopped: next == NULL (the rear of the queue)" : "stopped: next == NULL (the end of the list)");
             break;
         }
         if (next == head) { // circular list: the stop condition fires
@@ -508,12 +581,33 @@ void Game::drawInspector() const {
         } else if (isCircular && current->next == head) {
             note = "next is the head: this is the tail of the loop.";
         }
+        if (isStack) { // the stair: what push and pop would do from here
+            if (head != current) note = "push() set a new stone on top. Climb onto it.";
+            else if (gateOpen || (stage >= 1 && current->next == nullptr)) note = "N1's next is NULL: it is the bottom of the stack.";
+            else if (stage == 0 && current->next == nullptr) note = "N1 is the whole stack. E pushes a stone onto it.";
+            else if (stage == 0 && current->id < World::STONE_SLOTS) note = "E pushes a stone. Its next will be this stone.";
+            else if (stage == 0) note = "The stair reaches the bell. Press E to ring it.";
+            else note = "S pops: top = top->next, then the old top is deleted.";
+        } else if (isQueue) { // the line of boats: the two ends
+            if (current->next == nullptr) {
+                note = world.boatsRemain() ? "This is the rear. E: rear->next = boat; rear = boat;" : "This is the rear, and no more boats are coming.";
+            } else if (current == head) {
+                note = "You stand on the front. Step off and it leaves: dequeue().";
+            }
+        }
     }
     char stepsLine[96] = "";
     if (isCircular) {
         std::snprintf(stepsLine, sizeof(stepsLine), "Steps this walk: %d.  Stop when current == N%d.  Safety limit: %d.",
                       loopSteps, (loopStartNode != nullptr) ? loopStartNode->id : 1, MAX_LOOP_STEPS);
+    } else if (isStack && head != nullptr) {
+        std::snprintf(stepsLine, sizeof(stepsLine), "Stones in the stack: %d.  The top is N%d.", steps, head->id);
+    } else if (isQueue && head != nullptr) {
+        const Node* rear = world.getQueueRear();
+        std::snprintf(stepsLine, sizeof(stepsLine), "Boats in the queue: %d.  Front N%d, rear N%d.", steps, head->id,
+                      (rear != nullptr) ? rear->id : 0);
     }
+    const bool hasStepsLine = stepsLine[0] != '\0';
     const char* lesson = REGION_LESSONS[regionIndex];
 
     const float width = 412.0f;
@@ -522,9 +616,9 @@ void Game::drawInspector() const {
     const float valueX = x + pad + 134.0f;
     const float rightX = x + width - pad;
     int walkLines = layoutTokens(tokens, count, x + pad, 0.0f, rightX, false, style.ink);
-    float height = 40.0f + 24.0f + 16.0f + 26.0f + 26.0f + 30.0f + 12.0f + 16.0f + walkLines * 26.0f + 16.0f +
-                   (note != nullptr ? 16.0f : 0.0f) + (isCircular ? 16.0f : 0.0f) + 10.0f + 16.0f +
-                   countLines(lesson) * 14.0f + 12.0f;
+    float height = 40.0f + 24.0f + 16.0f + 26.0f + 26.0f + 30.0f + (isQueue ? 26.0f : 0.0f) + 12.0f + 16.0f +
+                   walkLines * 26.0f + 16.0f + (note != nullptr ? 16.0f : 0.0f) + (hasStepsLine ? 16.0f : 0.0f) + 10.0f +
+                   16.0f + countLines(lesson) * 14.0f + 12.0f;
     float y = 10.0f;
 
     drawParchment(Rectangle{x, y, width, height});
@@ -557,11 +651,26 @@ void Game::drawInspector() const {
         DrawText("->", (int)(valueX - 30.0f), (int)y, 20, INK_SOFT);
         DrawText(text, (int)valueX, (int)y, 20, current->next != nullptr ? INK : INK_NULL);
         if (current->next == nullptr) drawStopMark(valueX + MeasureText(text, 20) + 10.0f, y + 9.0f, INK_NULL);
+        else if (isStack) DrawText("under it", (int)(rightX - MeasureText("under it", 10)), (int)y + 6, 10, INK_SOFT);
         else if (!emphasizePrevious) DrawText("follow", (int)(rightX - MeasureText("follow", 10)), (int)y + 6, 10, style.ink);
         y += 26.0f;
 
-        // previous: only the doubly linked list stores it.
-        if (isDoubly) {
+        // The stack and the queue keep pointers to their ends; the doubly linked list stores previous.
+        auto drawEnd = [&](const char* name, const Node* end, const char* tag) {
+            describeNode(text, sizeof(text), end);
+            DrawText(name, (int)(x + pad), (int)y, 20, style.ink);
+            DrawText("->", (int)(valueX - 30.0f), (int)y, 20, INK_SOFT);
+            DrawText(text, (int)valueX, (int)y, 20, end != nullptr ? INK : INK_NULL);
+            if (end == nullptr) drawStopMark(valueX + MeasureText(text, 20) + 10.0f, y + 9.0f, INK_NULL);
+            else if (tag != nullptr) DrawText(tag, (int)(rightX - MeasureText(tag, 10)), (int)y + 6, 10, style.ink);
+        };
+        if (isStack) {
+            drawEnd("top", head, (head == current) ? "you are here" : "climb");
+        } else if (isQueue) {
+            drawEnd("front", head, (head == current) ? "you are here" : nullptr);
+            y += 26.0f;
+            drawEnd("rear", world.getQueueRear(), world.boatsRemain() ? "E adds here" : nullptr);
+        } else if (isDoubly) {
             describeNode(text, sizeof(text), current->previous);
             DrawText("previous", (int)(x + pad), (int)y, 20, style.ink);
             DrawText("->", (int)(valueX - 30.0f), (int)y, 20, INK_SOFT);
@@ -577,13 +686,13 @@ void Game::drawInspector() const {
 
     DrawRectangle((int)(x + pad), (int)y, (int)(width - 2.0f * pad), 1, Fade(INK_SOFT, 0.5f));
     y += 12.0f;
-    DrawText("WALK FROM HEAD", (int)(x + pad), (int)y, 10, INK_SOFT);
+    DrawText(isStack ? "WALK FROM THE TOP" : (isQueue ? "WALK FROM THE FRONT" : "WALK FROM HEAD"), (int)(x + pad), (int)y, 10, INK_SOFT);
     y += 16.0f;
     layoutTokens(tokens, count, x + pad, y, rightX, true, style.ink);
     y += walkLines * 26.0f;
     DrawText(stopNote, (int)(x + pad), (int)y, 10, INK_SOFT);
     y += 16.0f;
-    if (isCircular) {
+    if (hasStepsLine) {
         DrawText(stepsLine, (int)(x + pad), (int)y, 10, INK);
         y += 16.0f;
     }
@@ -639,7 +748,7 @@ void Game::drawMessageBox() const {
 // sound on the right (up and down choose a row, left and right change it).
 void Game::drawPauseScreen() const {
     DrawRectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, Fade(BLACK, 0.55f));
-    Rectangle cover = {SCREEN_WIDTH / 2.0f - 400.0f, 150.0f, 800.0f, 410.0f};
+    Rectangle cover = {SCREEN_WIDTH / 2.0f - 400.0f, 135.0f, 800.0f, 450.0f};
     DrawRectangleRounded(Rectangle{cover.x + 5.0f, cover.y + 6.0f, cover.width, cover.height}, 0.05f, 6, Fade(BLACK, 0.4f));
     DrawRectangleRounded(cover, 0.05f, 6, LEATHER);
     DrawRectangleRoundedLinesEx(Rectangle{cover.x + 10.0f, cover.y + 10.0f, cover.width - 20.0f, cover.height - 20.0f}, 0.05f,
@@ -661,11 +770,13 @@ void Game::drawPauseScreen() const {
         {"A / D  or  LEFT / RIGHT", "walk"},
         {"SPACE", "jump"},
         {"E  or  ENTER", "interact, turn a note's page"},
+        {"S  or  DOWN", "take the top stone off (Region 5)"},
         {"TAB", "open or close the field journal"},
         {"ESC", "pause and resume"},
         {"M", "sound off or on"},
+        {"F11  or  ALT+ENTER", "fullscreen or window"},
     };
-    float rowY = cover.y + 154.0f;
+    float rowY = cover.y + 152.0f;
     const float keysRight = leftX + 150.0f;
     for (const Row& row : rows) { // key caps right-aligned, actions beside them
         float capWidth = MeasureText(row.key, 10) + 12.0f;
@@ -673,19 +784,21 @@ void Game::drawPauseScreen() const {
         DrawRectangleRounded(Rectangle{capX, rowY, capWidth, 16.0f}, 0.3f, 4, PARCHMENT);
         DrawText(row.key, (int)(capX + 6.0f), (int)rowY + 3, 10, LEATHER_DARK);
         DrawText(row.action, (int)(keysRight + 12.0f), (int)rowY + 3, 10, PARCHMENT);
-        rowY += 28.0f;
+        rowY += 26.0f;
     }
 
-    // Right page: the sound.
+    // Right page: the sound, and the screen.
     const float rightX = cover.x + 470.0f;
-    DrawRectangle((int)rightX - 34, (int)cover.y + 132, 1, 176, Fade(GILT, 0.35f));
+    DrawRectangle((int)rightX - 34, (int)cover.y + 132, 1, 236, Fade(GILT, 0.35f));
     DrawText("SOUND", (int)rightX, (int)cover.y + 132, 10, GILT);
+    DrawText("SCREEN", (int)rightX, (int)cover.y + 270, 10, GILT);
     const AudioSettings& s = audio.settings();
-    const char* labels[3] = {"Music", "Sounds", "Mute"};
+    const char* labels[4] = {"Music", "Sounds", "Mute", "Mode"};
+    const float rowsY[4] = {cover.y + 156.0f, cover.y + 192.0f, cover.y + 228.0f, cover.y + 292.0f};
     const float values[2] = {s.music, s.sounds};
-    for (int i = 0; i < 3; i++) {
-        float y = cover.y + 158.0f + i * 40.0f;
-        bool selected = audioRow == i;
+    for (int i = 0; i < 4; i++) {
+        float y = rowsY[i];
+        bool selected = settingsRow == i;
         if (selected) { // a gilt marker and a soft band on the chosen row
             DrawRectangleRounded(Rectangle{rightX - 14.0f, y - 7.0f, 300.0f, 30.0f}, 0.4f, 6, Fade(GILT, 0.14f));
             DrawPoly(Vector2{rightX - 6.0f, y + 8.0f}, 4, 5.0f, 0.0f, GILT);
@@ -707,15 +820,20 @@ void Game::drawPauseScreen() const {
             const char* percent = TextFormat("%d%%", (int)std::round(values[i] * 100.0f));
             Color percentColor = (selected && audioRowFlash > 0.0f) ? GILT : PARCHMENT;
             DrawText(percent, (int)(barX + notches * 15.0f + 10.0f), (int)y, 20, percentColor);
-        } else {
+        } else if (i == 2) {
             const char* muteText = s.muted ? "on: no sound" : "off";
             DrawText(muteText, (int)rightX + 96, (int)y, 20, s.muted ? NULL_AMBER : PARCHMENT);
+        } else { // the screen: the window, or fullscreen at the monitor's own resolution
+            const char* mode = display.isFullscreen() ? "fullscreen" : "window";
+            DrawText(mode, (int)rightX + 96, (int)y, 20, PARCHMENT);
+            const char* size = TextFormat("%d x %d", display.width(), display.height());
+            DrawText(size, (int)rightX + 108 + MeasureText(mode, 20), (int)y + 6, 10, Fade(PARCHMENT, 0.7f));
         }
     }
-    DrawText("W / S  or  UP / DOWN:  choose a row", (int)rightX - 6, (int)cover.y + 280, 10, Fade(PARCHMENT, 0.7f));
-    DrawText("A / D  or  LEFT / RIGHT:  change it", (int)rightX - 6, (int)cover.y + 296, 10, Fade(PARCHMENT, 0.7f));
+    DrawText("W / S  or  UP / DOWN:  choose a row", (int)rightX - 6, (int)cover.y + 334, 10, Fade(PARCHMENT, 0.7f));
+    DrawText("A / D  or  LEFT / RIGHT:  change it", (int)rightX - 6, (int)cover.y + 350, 10, Fade(PARCHMENT, 0.7f));
     if (!audio.isReady()) { // no audio device, or no assets/audio folder: say so instead of failing quietly
-        DrawText("Sound is unavailable on this computer.", (int)rightX - 6, (int)cover.y + 316, 10, NULL_AMBER);
+        DrawText("Sound is unavailable on this computer.", (int)rightX - 6, (int)cover.y + 368, 10, NULL_AMBER);
     }
 
     float total = measureKeyHint("ESC", "resume") + 30.0f + measureKeyHint("Q", "quit");
@@ -750,7 +868,7 @@ void Game::drawCompleteScreen() const {
     DrawEllipse((int)portraitFeet.x, (int)portraitFeet.y + 6, 70.0f, 10.0f, Fade(PARCHMENT_SHADE, 0.9f));
     drawTraveler(portrait, elapsed, portraitFeet, 4.0f);
 
-    const char* journey = "Four places, four lists, one journey.";
+    const char* journey = "Six places, six lists, one journey.";
     DrawText(journey, (int)middle - MeasureText(journey, 20) / 2, (int)left.y + 352, 20, INK);
     const char* closing = "Every link followed, and every gap mended.";
     DrawText(closing, (int)middle - MeasureText(closing, 10) / 2, (int)left.y + 386, 10, INK_SOFT);
@@ -765,17 +883,19 @@ void Game::drawCompleteScreen() const {
         {"next and previous go both ways.", "Both ends point to NULL."},
         {"The tail's next is the head.", "Stop when you are back at the start."},
         {"Check a pointer before you follow it.", "nullptr means there is no node."},
+        {"Push and pop at one end, the top.", "The last in is the first out."},
+        {"Add at the rear, take from the front.", "The first in is the first out."},
     };
     for (int i = 0; i < REGION_COUNT; i++) {
         const RegionInfo& region = world.getRegion(i);
         const RegionStyle& style = REGION_STYLES[i];
-        float y = right.y + 34.0f + i * 112.0f;
+        float y = right.y + 22.0f + i * 92.0f;
         float x = right.x + 34.0f;
-        drawRegionSketch(i, x + 14.0f, y + 16.0f, style.ink);
+        drawRegionSketch(i, x + 14.0f, y + 14.0f, style.ink);
         DrawText(TextFormat("%d  %s", i + 1, region.placeName), (int)x + 44, (int)y, 20, style.ink);
-        DrawText(region.title, (int)x + 44, (int)y + 26, 10, INK_SOFT);
-        DrawText(entries[i].line1, (int)x + 44, (int)y + 46, 20, INK);
-        DrawText(entries[i].line2, (int)x + 44, (int)y + 70, 20, INK);
+        DrawText(region.title, (int)x + 44, (int)y + 23, 10, INK_SOFT);
+        DrawText(entries[i].line1, (int)x + 44, (int)y + 38, 20, INK);
+        DrawText(entries[i].line2, (int)x + 44, (int)y + 60, 20, INK);
     }
 
     float total = measureKeyHint("R", "walk again") + 40.0f + measureKeyHint("Q / ESC", "exit");
@@ -835,6 +955,13 @@ const char* Game::currentObjective() const {
             if (stage == 0) return "Make your way to the cliff's edge.";
             if (stage == 1) return inspectorOpen ? "Mend the missing link." : "Look before you step: check the way ahead.";
             return "Cross the bridge to the far cliff.";
+        case 4:
+            if (gateOpen) return "The sea door is open. Walk through it.";
+            if (stage == 0) return "Set stones and climb to the fog bell.";
+            return "Take the stair down, top stone first.";
+        case 5:
+            if (gateOpen) return "The cabin door is open. Walk through it.";
+            return world.boatsRemain() ? "Call boats and cross the harbor to the ship." : "The ship is in. Cross the boats to reach it.";
         default:
             return "";
     }

@@ -1,4 +1,4 @@
-# The four region cards (240x135 each, the game's 16:9): one moment from each list, framed
+# The six region cards (240x135 each, the game's 16:9): one moment from each list, framed
 # like the game's screen with the HUD label (top left) and the pointer-code line (bottom left).
 
 $CardW = 240
@@ -921,5 +921,554 @@ function Write-Edge {
     Fill $stop (13 + (Text-Width $t1) + 5) ($CardH - 13) 3 1 $UiNavy
     Add ('<g class="code1">' + (Hud-Card 5 ($CardH - 20) $w1 15 $Accents[3]) + (Text $t1 13 ($CardH - 16) $NullAmber) + (Layer-Svg $stop) + '</g>')
     Add (Card-Code 4 'append(): N3->next = N4' $CodeBlue ' class="code2"')
+    Card-End
+}
+
+# ---------------------------------------------------------------------------
+# Region 5, The Lighthouse Stair: a stack. push() slides a stone out of the tower wall on top
+# of the others and the traveler climbs onto it; only the top stone holds. The fog bell rings
+# at the top, then pop() takes the stones back into the wall, the last one first, and the
+# traveler comes down to the sea door.
+# ---------------------------------------------------------------------------
+
+$Light = @{
+    SkyTop = '#7490b0'; SkyMid = '#b0bac2'; SkyLow = '#d8ccb6'; Sun = '#fff4dc'; Fog = '#d4d6d4'
+    SeaFar = '#a8b8c0'; SeaNear = '#5a7484'; SeaDeep = '#2e4252'; Foam = '#eef4f4'; Veil = '#96a4b2'
+    Dark = '#1a2028'; Lamp = '#ffe096'; FarLand = '#a2aab4'
+    Rock0 = '#222832'; Rock1 = '#343c48'; Rock2 = '#4c5662'; Rock3 = '#6a727c'; Rock4 = '#90969c'
+    Grass = '#567652'; GrassLight = '#7a9660'
+    Tower0 = '#7c7672'; Tower1 = '#a09890'; Tower2 = '#beb6aa'; Tower3 = '#d4ccbe'; Tower4 = '#e6e0d2'
+    Band1 = '#8e342e'; Band2 = '#b4463a'; Band3 = '#ce6250'
+    Sand1 = '#785a42'; Sand2 = '#a27c58'; Sand3 = '#c4a072'; Sand4 = '#e2c696'
+    Bronze1 = '#745228'; Bronze2 = '#a47a3a'; Bronze3 = '#d2aa5a'; Bronze4 = '#f4d892'
+    Iron = '#24262e'; IronLit = '#545860'; Glass = '#c8d8dc'; Door = '#38261e'; DoorLit = '#765640'
+}
+
+$LtCx = 150    # the tower's middle
+$LtBase = 110  # the floor stone's top, where the tower stands
+$LtTop = 20    # the gallery
+
+# Half the tower's width at row y: it narrows toward the top.
+function Tower-Half([int]$y) { return 13 + (I (5.0 * ($y - $LtTop) / ($LtBase - $LtTop))) }
+
+# The lighthouse: courses of pale stone with two red bands, lit on the side toward the sun,
+# a gallery and lantern room on top, the sea door at its foot, and a socket for each stone.
+function Paint-Lighthouse($layer, [int[]]$sockets) {
+    $l = $Light
+    for ($y = $LtTop; $y -lt $LtBase; $y++) {
+        $hw = Tower-Half $y
+        $x0 = $LtCx - $hw; $x1 = $LtCx + $hw
+        $band = ($y -ge 38 -and $y -lt 45) -or ($y -ge 66 -and $y -lt 73)
+        for ($x = $x0; $x -lt $x1; $x++) {
+            $u = ($x - $x0) / ($x1 - $x0) # 0 on the shaded side, 1 toward the sun
+            if ($band) {
+                $c = $l.Band2
+                if ($u -lt 0.2) { $c = $l.Band1 } elseif ($u -gt 0.7) { $c = $l.Band3 }
+            } else {
+                $c = $l.Tower2
+                if ($u -lt 0.18) { $c = $l.Tower1 } elseif ($u -gt 0.88) { $c = $l.Tower4 } elseif ($u -gt 0.6) { $c = $l.Tower3 }
+            }
+            $course = I (($y - $LtTop) / 4)
+            if ((($y - $LtTop) % 4) -eq 3) { $c = Mix $c $l.Tower0 0.3 }                    # mortar between courses
+            elseif ((($x + $course * 5) % 9) -eq 0) { $c = Mix $c $l.Tower0 0.22 }        # joints, offset each course
+            Dot $layer $x $y $c
+        }
+        if ($y -gt 84 -and $y -lt 104 -and ($y % 3) -ne 0) { Dot $layer ($x0 + 1) $y $l.Grass } # damp moss low on the shaded side
+    }
+    foreach ($top in $sockets) { # the sockets the stones slide out of
+        $edge = $LtCx + (Tower-Half $top)
+        Fill $layer ($edge - 2) $top 2 5 $l.Dark
+        Fill $layer ($edge - 3) ($top - 1) 3 1 $l.Tower0
+    }
+    foreach ($w in @(@(148, 28), @(152, 56), @(147, 84))) { Fill $layer $w[0] $w[1] 2 3 $l.Dark } # slit windows
+    Fill $layer 144 97 13 1 $l.Tower0 # the sea door: an arch of dark planks
+    Fill $layer 146 98 9 12 $l.Door
+    Fill $layer 147 97 7 1 $l.Door
+    Fill $layer 148 96 5 1 $l.Door
+    Fill $layer 150 98 1 12 $l.DoorLit
+    Fill $layer 146 103 9 1 $l.Iron
+    Fill $layer ($LtCx - 16) ($LtTop - 3) 32 3 $l.Iron # the gallery, its rail, and the lantern room
+    Fill $layer ($LtCx - 16) ($LtTop - 7) 32 1 $l.IronLit
+    for ($x = $LtCx - 16; $x -le $LtCx + 15; $x += 3) { Fill $layer $x ($LtTop - 7) 1 4 $l.Iron }
+    Fill $layer ($LtCx - 9) 8 18 7 $l.Glass
+    foreach ($mx in @(($LtCx - 10), ($LtCx - 1), ($LtCx + 9))) { Fill $layer $mx 8 1 7 $l.Iron }
+    for ($k = 0; $k -lt 4; $k++) { Fill $layer ($LtCx - 10 + $k * 2) (7 - $k) (20 - $k * 4) 1 $l.Band2 }
+    Fill $layer ($LtCx - 10) 7 20 1 $l.Band1
+    Fill $layer $LtCx 1 1 3 $l.Iron
+}
+
+# One of the stair's stones: a block of sandstone, its top lit, its end showing its depth.
+function Paint-StairStone($layer, [int]$x0, [int]$top, [int]$w, [int]$seed) {
+    $l = $Light
+    Fill $layer $x0 $top $w 1 $l.Sand4
+    Fill $layer $x0 ($top + 1) $w 2 $l.Sand3
+    Fill $layer $x0 ($top + 3) $w 1 $l.Sand2
+    Fill $layer $x0 ($top + 4) $w 1 $l.Sand1
+    Fill $layer ($x0 + $w - 1) ($top + 1) 1 4 $l.Sand2
+    for ($i = 0; $i -lt 3; $i++) { Dot $layer ($x0 + 3 + (I ((Hash01 ($seed * 7 + $i)) * ($w - 7)))) ($top + 2) $l.Sand2 }
+}
+
+# The headland across the water: rock with a grassy top, its face jagged toward the sea.
+function Paint-Headland($layer, [int]$x1, [int]$top, [int]$bottom) {
+    $l = $Light
+    for ($y = $top; $y -lt $bottom; $y++) {
+        $dy = $y - $top
+        $back = 0
+        if ($dy -gt 3) { $back = (I (($dy - 3) / 3)) + (I ((Hash01 (40 + (I ($dy / 2)))) * 3)) }
+        $r = $x1 - $back
+        $c = $l.Rock2
+        if ($dy -eq 0) { $c = $l.GrassLight } elseif ($dy -lt 3) { $c = $l.Grass } elseif ((($dy + (I ($dy / 5))) % 6) -eq 0) { $c = $l.Rock1 }
+        Fill $layer 0 $y $r 1 $c
+        if ($dy -ge 3) { Fill $layer ($r - 2) $y 2 1 $l.Rock3 }
+    }
+    for ($i = 0; $i -lt 8; $i++) { # grass tufts along the top
+        $gx = 2 + (I ((Hash01 (60 + $i)) * ($x1 - 6)))
+        Fill $layer $gx ($top - 1) 1 1 $l.Grass
+    }
+}
+
+# The floor stone: a long quay of wet blocks at the tower's foot, standing in the sea.
+function Paint-Quay($layer, [int]$x0, [int]$x1, [int]$top, [int]$water) {
+    $l = $Light
+    Fill $layer $x0 $top ($x1 - $x0) 1 $l.Rock4
+    for ($y = $top + 1; $y -lt $water + 6; $y++) {
+        $dy = $y - $top
+        $c = $l.Rock3
+        if ($dy -gt 2) { $c = $l.Rock2 }
+        if ($dy -gt 8) { $c = $l.Rock1 }
+        Fill $layer $x0 $y ($x1 - $x0) 1 $c
+        if (($dy % 4) -eq 0) { Fill $layer $x0 $y ($x1 - $x0) 1 (Mix $c $l.Rock0 0.4) }
+        else {
+            for ($x = $x0 + (I ($dy / 4)) * 5 % 11; $x -lt $x1; $x += 11) { Dot $layer $x $y (Mix $c $l.Rock0 0.4) }
+        }
+    }
+    for ($i = 0; $i -lt 10; $i++) { Dot $layer ($x0 + 3 + (I ((Hash01 (80 + $i)) * ($x1 - $x0 - 6)))) ($top + 1) $l.Rock4 } # wet sheen
+}
+
+function Lighthouse-Backdrop {
+    $l = $Light
+    Def-Linear 'lSky' @("0 $($l.SkyTop) 1", "0.55 $($l.SkyMid) 1", "1 $($l.SkyLow) 1")
+    Def-Linear 'lSea' @("0 $($l.SeaFar) 1", "1 $($l.SeaNear) 1")
+    Def-Linear 'lNear' @("0 $($l.SeaNear) 1", "1 $($l.SeaDeep) 1")
+    Def-Linear 'lBand' @("0 $($l.Fog) 0", "0.5 $($l.Fog) 0.42", "1 $($l.Fog) 0")
+    Def-Linear 'lBeam' @("0 $($l.Lamp) 0.42", "1 $($l.Lamp) 0") 'x1="1" y1="0" x2="0" y2="0"'
+    Def-Glow 'lSun' $l.Sun 0.6
+    Def-Glow 'lLamp' $l.Lamp 0.55
+    AddCss '@keyframes lDrift { 0%, 100% { transform: translateX(0px) } 50% { transform: translateX(-22px) } }'
+    Anim '.ldrift' 'lDrift' 18 'ease-in-out'
+    Anim '.ldrift2' 'lDrift' 13 'ease-in-out' '-6s'
+    AddCss '@keyframes lSweep { 0%, 100% { opacity: .55 } 50% { opacity: 1 } }'
+    Anim '.lbeam' 'lSweep' 4 'ease-in-out'
+
+    Add (Rect 0 0 $CardW 88 'url(#lSky)')
+    Add (Glow 214 62 46 'lSun')
+    $sun = New-Layer $CardW $CardH
+    Disc $sun 214 62 6 $l.Sun
+    Add (Layer-Svg $sun)
+    Add (Rect 0 86 $CardW 40 'url(#lSea)')
+    $far = New-Layer $CardW $CardH
+    for ($x = 0; $x -lt 96; $x++) { # a far cape in the haze
+        $h = 9 - (I ($x / 12)) + (I ((Hash01 (20 + (I ($x / 3)))) * 2))
+        if ($h -gt 0) { Fill $far $x (86 - $h) 1 $h $l.FarLand }
+    }
+    for ($i = 0; $i -lt 18; $i++) { # light on the water toward the sun
+        $sx = 150 + (I ((Hash01 (300 + $i)) * 90)); $sy = 88 + (I ((Hash01 (330 + $i)) * 24))
+        Fill $far $sx $sy (2 + ($i % 4)) 1 (Mix $l.SeaFar $l.Foam 0.5)
+    }
+    Add (Layer-Svg $far)
+    Add "<g class=`"ldrift`">$(Rect -30 36 300 14 'url(#lBand)')</g>"
+    Add "<path class=`"lbeam`" d=`"M$($LtCx - 10) 9L0 0V26L$($LtCx - 10) 14Z`" fill=`"url(#lBeam)`"/>" # the lamp's beam out over the sea
+}
+
+function Write-Lighthouse {
+    $l = $Light
+    $loop = 9.0
+    Card-Begin 'Region 5, The Lighthouse Stair: a stack. push() slides a stone out of the lighthouse wall on top of the stack and the traveler climbs onto it, because only the top stone holds. The fog bell rings at the top, then pop() takes the stones back in, the last one set first, and the traveler comes down to the sea door.'
+    Def-Traveler
+    Def-Overlays
+    Def-Glow 'lRing' $l.Lamp 0.5
+    Def-Glow 'lDoor' $l.Lamp 0.7
+    Lighthouse-Backdrop
+
+    $ground = New-Layer $CardW $CardH
+    Paint-Headland $ground 64 98 135
+    Fill $ground 96 112 14 12 $l.Rock1 # a rock awash off the headland
+    Fill $ground 98 110 9 2 $l.Rock2
+    Fill $ground 99 109 5 1 $l.Rock3
+    Add (Layer-Svg $ground)
+
+    # The stones, drawn behind the tower so they slide out of the wall. S2 goes in first and
+    # comes out last; while S3 is the top, S2 is veiled, because only the top holds.
+    $stones = @(@{ Id = 2; Top = 82; In = 0.5; Out = 5.6; Veil = @(2.6, 4.9) }, @{ Id = 3; Top = 54; In = 1.6; Out = 4.6; Veil = $null })
+    foreach ($s in $stones) {
+        $x0 = $LtCx + (Tower-Half $s.Top)
+        $layer = New-Layer $CardW $CardH
+        Paint-StairStone $layer $x0 $s.Top 24 $s.Id
+        $name = "st$($s.Id)"
+        Keyframes $name $loop @(0, 'transform:translateX(-24px)', $s.In, 'transform:translateX(-24px);animation-timing-function:ease-out', ($s.In + 0.35), 'transform:translateX(0px)',
+            $s.Out, 'transform:translateX(0px);animation-timing-function:ease-in', ($s.Out + 0.35), 'transform:translateX(-24px)', $loop, 'transform:translateX(-24px)')
+        Anim ".$name" $name $loop
+        $veil = ''
+        if ($s.Veil) {
+            Window-Keyframes "v$($s.Id)" $loop $s.Veil 0.3
+            Anim ".v$($s.Id)" "v$($s.Id)" $loop
+            $veil = Mask-Svg $layer $l.Veil " class=`"v$($s.Id)`" fill-opacity=`".6`""
+        }
+        Add "<g class=`"$name`">$(Layer-Svg $layer)$veil</g>"
+    }
+    AddCss '.st2, .st3 { transform: translateX(0px); } .ring, .door, .g2, .g3, .code2 { opacity: 0; }'
+
+    $tower = New-Layer $CardW $CardH
+    Paint-Lighthouse $tower @(82, 54)
+    Paint-Quay $tower 118 $CardW $LtBase 124
+    Add (Layer-Svg $tower)
+    Add (Glow $LtCx 11 16 'lLamp' ' class="pulse"')
+
+    # The sea door opens on warm light once the stair is down.
+    Window-Keyframes 'door' $loop @(6.2, 8.4) 0.5
+    Anim '.door' 'door' $loop
+    $lit = New-Layer $CardW $CardH
+    Fill $lit 146 98 9 12 $l.Lamp
+    Fill $lit 147 97 7 1 $l.Lamp
+    Fill $lit 148 96 5 1 $l.Lamp
+    Add ('<g class="door">' + (Glow 150 103 20 'lDoor') + (Layer-Svg $lit) + '</g>')
+
+    # The fog bell on its iron arm, over the highest stone. It swings when it is rung.
+    $arm = New-Layer $CardW $CardH
+    Fill $arm ($LtCx + 13) 21 25 1 $l.Iron
+    for ($k = 0; $k -lt 6; $k++) { Dot $arm ($LtCx + 13 + $k) (26 - $k) $l.Iron }
+    Add (Layer-Svg $arm)
+    $bell = New-Layer $CardW $CardH
+    $bx = $LtCx + 33
+    foreach ($row in @(@(22, 1), @(23, 2), @(24, 2), @(25, 2), @(26, 3), @(27, 3))) {
+        $y = $row[0]; $hw = $row[1]
+        Fill $bell ($bx - $hw) $y (2 * $hw + 1) 1 $l.Bronze2
+        Dot $bell ($bx - $hw) $y $l.Bronze1
+        if ($hw -gt 1) { Dot $bell ($bx + $hw - 1) $y $l.Bronze3 }
+        Dot $bell ($bx + $hw) $y $l.Bronze4
+    }
+    Fill $bell ($bx - 3) 27 7 1 $l.Bronze1
+    Dot $bell $bx 28 $l.Iron
+    Keyframes 'swing' $loop @(0, 'transform:rotate(0deg)', 2.9, 'transform:rotate(0deg)', 3.1, 'transform:rotate(-24deg)', 3.45, 'transform:rotate(20deg)',
+        3.8, 'transform:rotate(-13deg)', 4.1, 'transform:rotate(7deg)', 4.4, 'transform:rotate(0deg)', $loop, 'transform:rotate(0deg)')
+    Anim '.bell' 'swing' $loop 'ease-in-out'
+    AddCss ".bell { transform-origin: $($bx)px 21px; }"
+    Add (Layer-Svg $bell ' class="bell"')
+    Window-Keyframes 'ring' $loop @(3.0, 4.3) 0.4
+    Anim '.ring' 'ring' $loop
+    Add (Glow $bx 26 26 'lRing' ' class="ring"')
+
+    # The way on is the top: warm light rises from each new stone until the traveler stands on it.
+    Window-Keyframes 'g2' $loop @(0.85, 1.35) 0.15
+    Anim '.g2' 'g2' $loop
+    Window-Keyframes 'g3' $loop @(1.95, 2.55) 0.15
+    Anim '.g3' 'g3' $loop
+    Add (LinkGlow-Svg ($LtCx + (Tower-Half 82)) 24 82 'g2')
+    Add (LinkGlow-Svg ($LtCx + (Tower-Half 54)) 24 54 'g3')
+
+    # The sea below, with foam where it meets the stone.
+    Add (Rect 0 124 $CardW 11 'url(#lNear)')
+    AddCss '@keyframes lFoam { 0%, 100% { opacity: .35 } 50% { opacity: .9 } }'
+    $foam = New-Layer $CardW $CardH
+    for ($x = 0; $x -lt $CardW; $x++) { if ((Hash01 (500 + $x)) -gt 0.55) { Dot $foam $x 124 $l.Foam } }
+    for ($i = 0; $i -lt 12; $i++) { Fill $foam (I ((Hash01 (540 + $i)) * $CardW)) (127 + ($i % 3) * 2) (2 + $i % 3) 1 (Mix $l.SeaNear $l.Foam 0.4) }
+    Anim '.lfoam' 'lFoam' 3.6 'ease-in-out'
+    Add (Layer-Svg $foam ' class="lfoam"')
+    Add "<g class=`"ldrift2`">$(Rect -30 96 300 10 'url(#lBand)')</g>"
+
+    AddCss '@keyframes gullA { 0% { transform: translate(0px,0px) } 50% { transform: translate(-60px,6px) } 100% { transform: translate(-120px,0px) } }'
+    $gull = New-Layer $CardW $CardH
+    foreach ($g in @(@(118, 46), @(96, 58))) {
+        Dot $gull ($g[0] - 2) ($g[1] - 1) $l.Dark; Dot $gull ($g[0] - 1) $g[1] $l.Dark; Dot $gull $g[0] $g[1] $l.Dark
+        Dot $gull ($g[0] + 1) $g[1] $l.Dark; Dot $gull ($g[0] + 2) ($g[1] - 1) $l.Dark
+    }
+    Anim '.gullA' 'gullA' 20 'linear'
+    Add (Layer-Svg $gull ' class="gullA"')
+
+    $segs = @(@('idle', 0, 0.9, 214, 110, 214, 110), @('jump', 0.9, 1.4, 214, 110, 180, 82), @('idle', 1.4, 2.1, 180, 82, 180, 82),
+        @('jump', 2.1, 2.6, 180, 82, 178, 54), @('idle', 2.6, 4.65, 178, 54, 178, 54), @('fall', 4.65, 4.9, 178, 54, 178, 82),
+        @('land', 4.9, 5.05, 178, 82, 178, 82), @('idle', 5.05, 5.65, 178, 82, 178, 82), @('fall', 5.65, 5.95, 178, 82, 180, 110),
+        @('land', 5.95, 6.1, 180, 110, 180, 110), @('idle', 6.1, 6.6, 180, 110, 180, 110), @('walk', 6.6, 7.6, 180, 110, 154, 110),
+        @('idle', 7.6, $loop, 154, 110, 154, 110))
+    Add (Traveler-Route 'tv5' $segs $loop @(0, 0.3, 7.6, 8.0) -Mirror -still @(178, 54))
+
+    Vignette $CardW $CardH 0.5
+    Card-Label 5 'The Lighthouse Stair'
+    Switch-Keyframes 'code1' $loop @(0, 4.6)
+    Anim '.code1' 'code1' $loop 'steps(1,end)'
+    Switch-Keyframes 'code2' $loop @(4.6, $loop)
+    Anim '.code2' 'code2' $loop 'steps(1,end)'
+    Add (Card-Code 5 'push(): stone->next = top; top = stone;' $CodeBlue ' class="code1"')
+    Add (Card-Code 5 'pop(): top = top->next; delete old;' $CodeBlue ' class="code2"')
+    Card-End
+}
+
+# ---------------------------------------------------------------------------
+# Region 6, The Patient Harbor: a queue. enqueue() calls a boat to the rear of the line; the
+# traveler steps from the front boat to the next one, and the old front rows away with
+# dequeue(): the first boat in is the first to go.
+# ---------------------------------------------------------------------------
+
+$Harbor = @{
+    SkyTop = '#5494d6'; SkyMid = '#8ec4ec'; SkyLow = '#d6eaf2'; Sun = '#fffae4'; Cloud = '#fcfeff'; CloudShade = '#d6e4ee'
+    SeaFar = '#3c78aa'; SeaNear = '#4096ac'; WaterTop = '#4aa6ba'; WaterDeep = '#165076'; Foam = '#f0fafa'; Veil = '#d6e8ee'
+    Hill = '#8ca660'; HillShade = '#6c8e52'; Tree = '#385c3e'; TreeLight = '#4e764a'; Wall = '#f0ece0'; WallShade = '#c4beb2'
+    Roof = '#ac5438'; RoofLight = '#cc7048'; Window = '#46607e'
+    Stone = '#a0a6a6'; StoneLight = '#c8ccc6'; StoneDark = '#68707a'
+    Wood = '#7a583c'; WoodLight = '#a47c56'; WoodDark = '#38261c'; Lamp = '#ffd68c'; Dark = '#141e28'
+}
+$HarborBoats = @( # hull, hull light, rail: the boats of src/HarborArt.cpp
+    @('#b23a30', '#d6604a', '#f0e8da'), # the red skiff
+    @('#3460a0', '#5688c4', '#e8dec4'), # the blue dory
+    @('#387858', '#5c9e70', '#d2be8c'), # the green punt
+    @('#c89630', '#e2b854', '#784c30')  # the yellow gig
+)
+$HbWater = 106 # the harbor's surface
+$HbRail = 101  # the rail of every boat: its walkable top
+
+# A small wooden boat: its rail, a planked hull down to the water, and (unless it is the flat
+# punt) a sheer that sweeps up to the bow. Its reflection goes in $mirror.
+function Paint-Boat($layer, $mirror, [int]$x0, [int]$w, $paint, [switch]$Flat, [switch]$Lantern) {
+    $h = $Harbor
+    for ($dy = 0; $dy -lt ($HbWater - $HbRail); $dy++) {
+        $y = $HbRail + $dy
+        $in = 0
+        if (-not $Flat -and $dy -ge 3) { $in = $dy - 2 }
+        $c = $paint[1]
+        if ($dy -eq 0) { $c = $paint[2] } elseif ($dy -ge 2) { $c = $paint[0] }
+        if ($dy -eq ($HbWater - $HbRail - 1)) { $c = Mix $paint[0] $h.Dark 0.55 } # the dark stripe at the water
+        Fill $layer ($x0 + $in) $y ($w - 2 * $in) 1 $c
+        Dot $layer ($x0 + $in) $y (Mix $c $h.Dark 0.3)
+        Dot $layer ($x0 + $w - 1 - $in) $y (Mix $c $h.Dark 0.3)
+        Fill $mirror ($x0 + $in) (2 * $HbWater - 1 - $y) ($w - 2 * $in) 1 (Mix $c $h.WaterTop 0.45)
+    }
+    if (-not $Flat) {
+        for ($x = $x0; $x -le $x0 + $w; $x++) {
+            $toBow = [Math]::Max(0.0, [Math]::Min(1.0, ($x - ($x0 + $w - 9)) / 9.0))
+            $toStern = [Math]::Max(0.0, [Math]::Min(1.0, ($x0 + 3 - $x) / 3.0))
+            $rise = [int][Math]::Round([Math]::Max(3.0 * $toBow * $toBow, 1.2 * $toStern))
+            for ($k = 1; $k -le $rise; $k++) {
+                $c = $paint[1]
+                if ($k -eq $rise) { $c = $paint[2] }
+                Dot $layer $x ($HbRail - $k) $c
+            }
+        }
+    }
+    Dot $layer ($x0 + 7) $HbRail (Mix $paint[2] $h.Dark 0.5) # rowlocks
+    Dot $layer ($x0 + $w - 9) $HbRail (Mix $paint[2] $h.Dark 0.5)
+    for ($k = 0; $k -lt 9; $k++) { Dot $layer ($x0 + (I ($w / 2)) - 3 + $k) ($HbRail + 1 + (I ($k * 0.45))) $h.WoodLight } # an oar shipped over the side
+    if ($Lantern) {
+        Fill $layer ($x0 + 2) ($HbRail - 7) 1 7 $h.WoodDark
+        Fill $layer ($x0 + 1) ($HbRail - 9) 3 2 $h.WoodDark
+        Dot $layer ($x0 + 2) ($HbRail - 9) $h.Lamp
+    }
+}
+
+# A mooring post standing in the water at x, with a lamp on top.
+function Paint-MooringPost($layer, [int]$x) {
+    $h = $Harbor
+    Fill $layer $x 96 3 18 $h.Wood
+    Fill $layer $x 96 1 18 $h.WoodDark
+    Fill $layer ($x + 2) 96 1 18 $h.WoodLight
+    Fill $layer ($x - 1) 95 5 1 $h.WoodLight
+    Fill $layer $x 92 3 3 $h.Dark
+    Dot $layer ($x + 1) 93 (Mix $h.Lamp $h.Dark 0.6)
+}
+
+# A puffy cloud of a few round lumps with a shaded underside.
+function Paint-Cloud($layer, [double]$cx, [double]$cy, [double]$r) {
+    $h = $Harbor
+    Disc $layer ($cx - $r * 0.9) ($cy + $r * 0.2) ($r * 0.6) $h.Cloud
+    Disc $layer ($cx + $r * 0.9) ($cy + $r * 0.25) ($r * 0.55) $h.Cloud
+    Disc $layer $cx $cy $r $h.Cloud
+    $bottom = I ($cy + $r * 0.45)
+    for ($y = $bottom; $y -lt $cy + $r + 1; $y++) {
+        for ($x = I ($cx - 2 * $r); $x -lt $cx + 2 * $r; $x++) {
+            if ((Get-Pixel $layer $x $y) -eq $h.Cloud) { Dot $layer $x $y $h.CloudShade }
+        }
+    }
+}
+
+function Harbor-Backdrop {
+    $h = $Harbor
+    Def-Linear 'hSky' @("0 $($h.SkyTop) 1", "0.6 $($h.SkyMid) 1", "1 $($h.SkyLow) 1")
+    Def-Linear 'hSea' @("0 $($h.SeaFar) 1", "1 $($h.SeaNear) 1")
+    Def-Linear 'hWater' @("0 $($h.WaterTop) 1", "1 $($h.WaterDeep) 1")
+    Def-Glow 'hSun' $h.Sun 0.7
+    AddCss '@keyframes hCloud { 0%, 100% { transform: translateX(0px) } 50% { transform: translateX(-14px) } }'
+    Anim '.hcloud' 'hCloud' 22 'ease-in-out'
+
+    Add (Rect 0 0 $CardW 62 'url(#hSky)')
+    Add (Glow 206 18 40 'hSun')
+    $sky = New-Layer $CardW $CardH
+    Disc $sky 206 18 5 $h.Sun
+    Add (Layer-Svg $sky)
+    $clouds = New-Layer $CardW $CardH
+    Paint-Cloud $clouds 138 26 7
+    Paint-Cloud $clouds 186 40 5
+    Add (Layer-Svg $clouds ' class="hcloud"')
+    Add (Rect 0 60 $CardW 48 'url(#hSea)')
+
+    $mid = New-Layer $CardW $CardH
+    foreach ($isle in @(@(150, 14, 3), @(214, 18, 4))) { # islands far out
+        for ($x = $isle[0] - $isle[1]; $x -le $isle[0] + $isle[1]; $x++) {
+            $u = ($x - $isle[0]) / $isle[1]
+            $ih = I ([Math]::Sqrt([Math]::Max(0.0, 1 - $u * $u)) * $isle[2] + 0.5)
+            if ($ih -gt 0) { Fill $mid $x (60 - $ih) 1 $ih (Mix $h.HillShade $h.SkyLow 0.6) }
+        }
+    }
+    for ($x = 0; $x -lt 86; $x++) { # the town's hill, sloping down to the harbor, with a quay along its foot
+        $top = 40 + [Math]::Max(0, $x - 26) * 0.85 + ((Hash01 (700 + (I ($x / 3)))) - 0.5) * 2
+        if ($top -lt 84) {
+            Fill $mid $x (I $top) 1 (85 - (I $top)) $h.Hill
+            if ((I $top) + 6 -lt 85) { Fill $mid $x ((I $top) + 6) 1 (79 - (I $top)) $h.HillShade }
+            Dot $mid $x (I $top) (Mix $h.Hill '#ffffff' 0.25)
+        }
+        Fill $mid $x 85 1 2 $h.StoneLight
+        Dot $mid $x 87 $h.Stone
+    }
+    for ($i = 0; $i -lt 11; $i++) { # white houses with red roofs, stepping down the hill
+        $x = 3 + $i * 7 + (I ((Hash01 (720 + $i)) * 3))
+        $ht = 40 + [Math]::Max(0, $x + 4 - 26) * 0.85
+        $base = [Math]::Min(85, (I $ht) + 7 + (I ((Hash01 (740 + $i)) * 14)))
+        $w = 6 + (I ((Hash01 (760 + $i)) * 3)); $hh = 4 + (I ((Hash01 (780 + $i)) * 3))
+        Fill $mid $x ($base - $hh) $w $hh $h.Wall
+        Fill $mid $x ($base - $hh) 1 $hh $h.WallShade
+        Fill $mid ($x - 1) ($base - $hh - 1) ($w + 2) 1 $h.Roof
+        Fill $mid $x ($base - $hh - 2) $w 1 $h.RoofLight
+        Fill $mid ($x + 1) ($base - $hh - 3) ($w - 2) 1 $h.Roof
+        Dot $mid ($x + $w - 2) ($base - 2) $h.Window
+    }
+    foreach ($t in @(@(12, 54, 3), @(33, 60, 3), @(55, 68, 2.5), @(24, 76, 2.5))) { # trees among the houses
+        Disc $mid $t[0] $t[1] $t[2] $h.Tree
+        Disc $mid ($t[0] + 0.8) ($t[1] - 0.8) ($t[2] * 0.6) $h.TreeLight
+    }
+    Fill $mid 40 46 5 20 $h.Wall # the bell tower, twin of the lighthouse's bell
+    Fill $mid 40 46 1 20 $h.WallShade
+    Fill $mid 42 48 1 2 $h.Dark
+    Fill $mid 39 45 7 1 $h.Roof
+    Fill $mid 40 43 5 2 $h.Roof
+    Fill $mid 41 41 3 2 $h.RoofLight
+    Fill $mid 42 40 1 1 $h.Roof
+    for ($x = 90; $x -lt 206; $x++) { # the breakwater across the harbor, rubble at its end
+        $top = 84
+        if ($x -lt 96) { $top = 89 - ($x - 90) }
+        for ($y = $top; $y -lt 90; $y++) {
+            $c = $h.Stone
+            if ($y -eq $top) { $c = $h.StoneLight } elseif ($y -ge 88) { $c = $h.StoneDark }
+            if ($y -gt $top -and (($x + (I ($y / 2)) * 4) % 7) -eq 0) { $c = $h.StoneDark }
+            Dot $mid $x $y $c
+        }
+    }
+    for ($y = 72; $y -lt 84; $y++) { Fill $mid 201 $y 5 1 $(if ((I (($y - 72) / 3)) % 2 -eq 0) { $h.Wall } else { $h.Roof }) } # the harbor light
+    Fill $mid 200 70 7 2 $h.Dark
+    foreach ($m in @(@(122, 76, $h.Wall), @(150, 74, '#3460a0'), @(178, 77, $h.Wall))) { # masts of boats moored behind it
+        Fill $mid $m[0] 68 1 16 $h.WoodDark
+        Fill $mid ($m[0] - 4) $m[1] 8 1 $m[2]
+    }
+    Add (Layer-Svg $mid)
+    AddCss '@keyframes hBlink { 0%, 80% { opacity: .3 } 85%, 100% { opacity: 1 } }'
+    Anim '.hblink' 'hBlink' 3 'steps(1,end)'
+    Add (Rect 202 69 3 1 '#ff785a' ' class="hblink"')
+    Add (Rect 0 $HbWater $CardW ($CardH - $HbWater) 'url(#hWater)')
+    Add (Rect 0 $HbWater $CardW 1 $h.Foam ' fill-opacity=".4"')
+    AddCss '@keyframes hGlint { 0%, 100% { opacity: .15 } 50% { opacity: .7 } }'
+    $glints = New-Object System.Text.StringBuilder
+    for ($i = 0; $i -lt 16; $i++) {
+        $gx = I ((Hash01 (800 + $i)) * $CardW); $gy = $HbWater + 2 + (I ((Hash01 (820 + $i)) * 28))
+        [void]$glints.Append("<rect class=`"hglint`" style=`"animation-delay:-$(N ($i * 0.37))s`" x=`"$gx`" y=`"$gy`" width=`"$(2 + $i % 5)`" height=`"1`" fill=`"$($h.Foam)`"/>")
+    }
+    Anim '.hglint' 'hGlint' 2.6 'ease-in-out'
+    Add $glints.ToString()
+}
+
+function Write-Harbor {
+    $h = $Harbor
+    $loop = 8.0
+    Card-Begin 'Region 6, The Patient Harbor: a queue. enqueue() calls a boat to the rear of the line. The traveler steps from the front boat to the next one, and the old front rows away with dequeue(): the first boat in is the first to go.'
+    Def-Traveler
+    Def-Overlays
+    Def-Glow 'hLamp' $h.Lamp 0.7
+    Harbor-Backdrop
+
+    $posts = New-Layer $CardW $CardH
+    foreach ($px in @(2, 56, 110, 166)) { Paint-MooringPost $posts $px }
+    Add (Layer-Svg $posts)
+    Window-Keyframes 'postlamp' $loop @(0, 1.7) 0.3 # the lamp on the empty post, where the next boat will moor
+    Anim '.postlamp' 'postlamp' $loop
+    AddCss '@keyframes hPulse { 0%, 100% { opacity: .6 } 50% { opacity: 1 } }'
+    Anim '.hpulse' 'hPulse' 1.2 'ease-in-out'
+    Add ('<g class="postlamp"><g class="hpulse">' + (Glow 167.5 93.5 9 'hLamp') + (Rect 167 93 1 1 '#ffffff') + '</g></g>')
+
+    # The line of boats: (x, width, paint, flat punt, stern lantern). Boat 4 is called during the loop.
+    $boats = @(@(6, 42, 0, $false, $false), @(60, 40, 1, $false, $true), @(114, 44, 2, $true, $false), @(170, 40, 3, $false, $true))
+    $markup = @()
+    for ($b = 0; $b -lt 4; $b++) {
+        $d = $boats[$b]
+        $layer = New-Layer $CardW $CardH
+        $mirror = New-Layer $CardW $CardH
+        Paint-Boat $layer $mirror $d[0] $d[1] $HarborBoats[$d[2]] -Flat:$d[3] -Lantern:$d[4]
+        $wake = ''
+        if ($b -eq 0 -or $b -eq 3) { # rowing: foam trails behind the stern
+            $foam = New-Layer $CardW $CardH
+            for ($k = 0; $k -lt 7; $k++) { Fill $foam ($d[0] + $d[1] + 2 + $k * 3) ($HbWater - ($k % 2)) 2 1 $h.Foam }
+            $wake = Layer-Svg $foam " class=`"wake$b`""
+        }
+        $markup += , @($layer, $mirror, $wake)
+    }
+    # Opacity and position of each boat over the loop: every boat fades with the loop's start
+    # and end; boat 1 rows away after the traveler leaves it, and boat 4 rows in at the rear.
+    Keyframes 'boat0' $loop @(0, 'opacity:0;transform:translateX(0px)', 0.3, 'opacity:1;transform:translateX(0px)', 3.0, 'opacity:1;transform:translateX(0px);animation-timing-function:ease-in',
+        5.0, 'opacity:0;transform:translateX(-46px)', $loop, 'opacity:0;transform:translateX(-46px)')
+    Keyframes 'boat1' $loop @(0, 'opacity:0', 0.3, 'opacity:1', 7.4, 'opacity:1', 7.8, 'opacity:0', $loop, 'opacity:0')
+    Keyframes 'boat3' $loop @(0, 'opacity:0;transform:translateX(56px)', 0.6, 'opacity:0;transform:translateX(56px);animation-timing-function:ease-out', 1.7, 'opacity:1;transform:translateX(0px)',
+        7.4, 'opacity:1;transform:translateX(0px)', 7.8, 'opacity:0;transform:translateX(0px)', $loop, 'opacity:0;transform:translateX(56px)')
+    Anim '.boat0' 'boat0' $loop
+    Anim '.boat1, .boat2' 'boat1' $loop
+    Anim '.boat3' 'boat3' $loop
+    Window-Keyframes 'wake0' $loop @(3.0, 4.6) 0.4
+    Anim '.wake0' 'wake0' $loop
+    Window-Keyframes 'wake3' $loop @(0.6, 1.5) 0.4
+    Anim '.wake3' 'wake3' $loop
+    Window-Keyframes 'veil2' $loop @(0, 2.6) 0.3 # boat 3 is mist until it becomes current->next
+    Anim '.veil2' 'veil2' $loop
+    AddCss '.boat0 { opacity: 1; } .boat3 { opacity: 0; } .wake0, .wake3, .g3, .code2 { opacity: 0; } .veil2 { opacity: 1; }'
+    for ($b = 0; $b -lt 4; $b++) {
+        $layer = $markup[$b][0]
+        $veil = ''
+        if ($b -eq 2) { $veil = Mask-Svg $layer $h.Veil ' class="veil2" fill-opacity=".55"' }
+        if ($b -eq 3) { $veil = Mask-Svg $layer $h.Veil ' fill-opacity=".55"' } # boat 4 is never next while it is in view
+        Add ("<g class=`"boat$b`">" + (Layer-Svg $markup[$b][1] ' fill-opacity=".5"') + $markup[$b][2] + (Layer-Svg $layer) + $veil + '</g>')
+    }
+
+    # Warm light on current->next: boat 2 while the traveler is on the front, then boat 3.
+    Window-Keyframes 'g2' $loop @(0.3, 2.2) 0.2
+    Anim '.g2' 'g2' $loop
+    Window-Keyframes 'g3' $loop @(2.8, 7.4) 0.3
+    Anim '.g3' 'g3' $loop
+    Add (LinkGlow-Svg 60 40 $HbRail 'g2')
+    Add (LinkGlow-Svg 114 44 $HbRail 'g3')
+
+    AddCss '@keyframes gullH { 0% { transform: translate(0px,0px) } 50% { transform: translate(80px,-6px) } 100% { transform: translate(160px,0px) } }'
+    $gull = New-Layer $CardW $CardH
+    foreach ($g in @(@(70, 40), @(84, 48))) {
+        Dot $gull ($g[0] - 2) ($g[1] - 1) '#f4f6f8'; Dot $gull ($g[0] - 1) $g[1] '#f4f6f8'; Dot $gull $g[0] $g[1] $h.Dark
+        Dot $gull ($g[0] + 1) $g[1] '#f4f6f8'; Dot $gull ($g[0] + 2) ($g[1] - 1) '#f4f6f8'
+    }
+    Anim '.gullH' 'gullH' 24 'linear'
+    Add (Layer-Svg $gull ' class="gullH"')
+
+    $segs = @(@('idle', 0, 2.2, 27, $HbRail, 27, $HbRail), @('jump', 2.2, 2.75, 27, $HbRail, 80, $HbRail), @('land', 2.75, 2.9, 80, $HbRail, 80, $HbRail),
+        @('idle', 2.9, $loop, 80, $HbRail, 80, $HbRail))
+    Add (Traveler-Route 'tv6' $segs $loop @(0, 0.3, 7.4, 7.8) -arc 12 -still @(27, $HbRail))
+
+    Vignette $CardW $CardH 0.45
+    Card-Label 6 'The Patient Harbor'
+    Switch-Keyframes 'code1' $loop @(0, 2.9)
+    Anim '.code1' 'code1' $loop 'steps(1,end)'
+    Switch-Keyframes 'code2' $loop @(2.9, $loop)
+    Anim '.code2' 'code2' $loop 'steps(1,end)'
+    Add (Card-Code 6 'enqueue(): rear->next = boat; rear = boat;' $CodeBlue ' class="code1"')
+    Add (Card-Code 6 'dequeue(): front = front->next; delete old;' $CodeBlue ' class="code2"')
     Card-End
 }

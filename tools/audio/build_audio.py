@@ -72,13 +72,15 @@ VIBES = VC + "Vibraphone/"
 
 SOURCES = {
     # Music: Scott Buckley's Creative Commons library. One composer, related keys (C major, C minor,
-    # D major, C major, A-flat major), piano, strings, and synth pads throughout.
+    # D major, C major, D minor, C major, A-flat major), piano, strings, and synth pads throughout.
     "cobalt": buckley("cobalt", "Cobalt", "http://www.scottbuckley.com.au/library/wp-content/uploads/2017/11/sb_cobalt.mp3"),
     "cobalt_nopiano": dict(buckley("cobalt", "Cobalt (no piano version)", "http://www.scottbuckley.com.au/library/wp-content/uploads/2017/11/sb_cobalt_nopiano.mp3"),
                            attribution="'Cobalt' by Scott Buckley - released under CC-BY 4.0. www.scottbuckley.com.au"),
     "hiraeth": buckley("hiraeth", "Hiraeth", "https://www.scottbuckley.com.au/library/wp-content/uploads/2020/06/sb_hiraeth.mp3"),
     "reverie": buckley("reverie", "Reverie", "https://www.scottbuckley.com.au/library/wp-content/uploads/2020/03/sb_reverie.mp3"),
     "hymn": buckley("hymn-to-the-dawn", "Hymn To The Dawn", "https://www.scottbuckley.com.au/library/wp-content/uploads/2022/11/HymnToTheDawn.mp3"),
+    "solace": buckley("solace", "Solace", "https://www.scottbuckley.com.au/library/wp-content/uploads/2020/05/sb_solace.mp3"),
+    "home_was_you": buckley("home-was-you", "Home Was You", "https://www.scottbuckley.com.au/library/wp-content/uploads/2026/07/HomeWasYou.mp3"),
 
     # Ambience field recordings (Freesound, CC0).
     "forest_evening": freesound("blaukreuz", 240588, "140809_FrybgWb_Forest_Evening_F.wav", "240/240588_623488"),
@@ -92,6 +94,8 @@ SOURCES = {
     "pine_breeze": freesound("keweldog", 181801, "breeze.wav", "181/181801_3153523"),
     "wind_gusts": freesound("BudJillett", 109485, "Wind-Gusts-late-autumn.wav", "109/109485_1213320"),
     "robin_woodland": freesound("chris_dagorne", 563153, "Windy UK Woodland in late Winter with European Robin singing", "563/563153_3380363"),
+    "cliff_sea": freesound("bruno.auzet", 525029, "sea from cliff.wav", "525/525029_11519060"),
+    "harbour": freesound("Kinoton", 561815, "Genaral Habour Ambience", "561/561815_2247456"),
 
     # Effects (Freesound, CC0).
     "torch": freesound("ldezem", 386385, "Torch - Ignite flame on soft", "386/386385_1655965"),
@@ -104,6 +108,10 @@ SOURCES = {
     "pebbles": freesound("Vrymaa", 734669, "Stone - Throwing pebbles", "734/734669_13973196"),
     "stones": freesound("iwanPlays", 567251, "Stones Falling", "567/567251_7108319"),
     "brook": freesound("pepasystem", 819768, "Small Brook Flowing Around Rocks", "819/819768_4036966"),
+    "paddles": freesound("brunoboselli", 249707, "Paddles rowing on a calm water stream", "249/249707_300738"),
+    "gull_pair": freesound("Canardo55", 538015, "Herring Gull 2.wav", "538/538015_11982267"),
+    "gull_call": freesound("Canardo55", 538016, "Herring Gull 1.wav", "538/538016_11982267"),
+    "gull_flying": freesound("henner1964", 699979, "Seagull", "699/699979_2337062"),
 
     # Kenney packs (CC0).
     **{f"k_grass{i}": kenney("impact-sounds", "Impact Sounds", f"footstep_grass_00{i}.ogg") for i in range(5)},
@@ -112,6 +120,9 @@ SOURCES = {
     **{f"k_carpet{i}": kenney("impact-sounds", "Impact Sounds", f"footstep_carpet_00{i}.ogg") for i in range(4)},
     **{f"k_plank{i}": kenney("impact-sounds", "Impact Sounds", f"impactPlank_medium_00{i}.ogg") for i in range(5)},
     "k_soft": kenney("impact-sounds", "Impact Sounds", "impactSoft_medium_000.ogg"),
+    **{f"k_thud{i}": kenney("impact-sounds", "Impact Sounds", f"impactSoft_heavy_00{i}.ogg") for i in range(3)},
+    **{f"k_mining{i}": kenney("impact-sounds", "Impact Sounds", f"impactMining_00{i}.ogg") for i in range(3)},
+    **{f"k_knock{i}": kenney("impact-sounds", "Impact Sounds", f"impactWood_medium_00{i}.ogg") for i in range(3)},
     **{f"k_step{i}": kenney("rpg-audio", "RPG Audio", f"footstep0{i}.ogg") for i in range(5)},
     **{f"k_cloth{i}": kenney("rpg-audio", "RPG Audio", f"cloth{i}.ogg") for i in range(1, 4)},
     "k_book_open": kenney("rpg-audio", "RPG Audio", "bookOpen.ogg"),
@@ -137,6 +148,10 @@ SOURCES = {
     "marktree_random": vcsl(VC + "Mark Trees/Legacy/windchimes_random.wav"),
     "belltree": vcsl(VC + "Bell Tree/Stroke/BellTree_Stroke_1_Mid.wav"),
     "tubular_C4": vcsl(VC + "Tubular Bells 1/chimes_C4_p_rr1.wav"),
+    "tubular_D3": vcsl(VC + "Tubular Bells 1/chimes_D3_ff_rr1.wav"),
+    "tubular_D3_soft": vcsl(VC + "Tubular Bells 1/chimes_D3_pp_rr3.wav"),
+    "tubular_D4": vcsl(VC + "Tubular Bells 1/chimes_D4_p_rr1.wav"),
+    "tubular_C5": vcsl(VC + "Tubular Bells 2/TB_hit_C5_v4_1.wav"),
     "gong": vcsl(VC + "Gong 1/gong_p.wav"),
 }
 
@@ -231,6 +246,11 @@ def fade(x, fade_in=0.0, fade_out=0.0):
 
 def db(value):
     return 10 ** (value / 20.0)
+
+
+def normalized(x):
+    """Peak at full scale: samples recorded at different levels can then be mixed by their gains."""
+    return x / (np.max(np.abs(x)) + 1e-12)
 
 
 def filt(x, kind, freq, order=2):
@@ -475,6 +495,8 @@ MUSIC = [
     ("music/garden", "reverie", 8.00, 200.60, 6.0),
     ("music/edge", "cobalt_nopiano", 15.20, 179.90, 7.0),
     ("music/dawn", "hymn", 17.50, 124.50, 6.0),
+    ("music/lighthouse", "solace", 22.30, 320.60, 7.0),
+    ("music/harbor", "home_was_you", 75.70, 206.50, 7.0),
     ("music/finale", "hymn", 152.00, 352.20, 7.0),
 ]
 
@@ -540,6 +562,23 @@ def build_ambience():
     CURRENT.append(("robin_woodland", f"section {a:.1f}-{b:.1f} s looped with a 5 s crossfade"))
     write("ambience/edge_dawn", loudness_to(dawn, -32.0), quality=q)
 
+    # The Lighthouse Stair: waves breaking on the rocks below, heard from the cliff top, with a thin
+    # breeze over them. The biggest breakers are turned down so the surf stays a bed.
+    surf = highpass(use("cliff_sea", "high-pass 70 Hz; the biggest breakers turned down by a gentle peak limiter"), 70)
+    surf = tame_peaks(surf / (np.max(np.abs(surf)) + 1e-12), -9.0, release=0.4)
+    air_loop, _, _ = looped_bed(highpass(use("pine_breeze", "high-pass 1.5 kHz, looped (5 s crossfade) and repeated over the surf, -14 dB"), 1500), 3.0, 60.0, 5.0)
+    length = len(surf) / RATE
+    layered = mix(length, (surf, 0, 0.0), (tile(air_loop, length), 0, -14.0))
+    cliff, a, b = looped_bed(layered, 8.0, 160.0, 6.0, 6.0)
+    CURRENT.append(("cliff_sea", f"the mix looped: section {a:.1f}-{b:.1f} s with a 6 s crossfade"))
+    write("ambience/lighthouse", loudness_to(cliff, -30.0), quality=q)
+
+    # The Patient Harbor: water against the quay, boats creaking at their moorings, gulls far off.
+    x = highpass(use("harbour", "high-pass 80 Hz"), 80)
+    harbor, a, b = looped_bed(x, 30.0, 160.0, 6.0, 10.0)
+    CURRENT.append(("harbour", f"section {a:.1f}-{b:.1f} s looped with a 6 s crossfade"))
+    write("ambience/harbor", loudness_to(harbor, -31.0), quality=q)
+
 def steps(prefix, keys, target, edit, lp=8000.0, hp=60.0, room=None, layer=None):
     for i, key in enumerate(keys, 1):
         x = trim_active(use(key, edit, mono=True), -45.0, pre=0.003, post=0.06)
@@ -588,6 +627,8 @@ NEXT_NOTES = {  # region -> {node id: note} for arriving on that node through ne
     2: {2: "Eb5", 3: "F5", 4: "G5", 5: "Bb5"},        # C minor pentatonic
     3: {2: "E5", 3: "F#5", 4: "A5"},                  # D major pentatonic
     4: {2: "D5", 3: "E5"},                            # C major, unresolved: the way runs out
+    5: {2: "D5", 3: "F5", 4: "A5", 5: "D6"},          # D minor, rising with the stair (push); pop plays them back down
+    6: {1: "C5", 2: "D5", 3: "E5", 4: "G5", 5: "A5", 6: "C6"},  # C major pentatonic, in the order the boats came
 }
 BACK_NOTES = {1: "C5", 2: "Eb5", 3: "F5", 4: "G5"}   # Region 2, arriving through previous (cool vibraphone)
 
@@ -613,6 +654,10 @@ def build_notes():
     # Region 4: the appended bridge node, in the dawn's key (A-flat major).
     bridge = phrase("harp", ["Ab4", "Eb5", "Ab5"], step=0.07, length=3.0)
     write("sfx/notes/r4_n4", level(fade(reverb(bridge, 1.6, wet=-12.0), 0, 1.2), -25), quality=0.5)
+    # Region 6: the ship at the end of the line, the last node of the journey: a rolled C major chord.
+    ship = mix(3.4, (phrase("harp", ["C5", "G5", "C6", "E6"], step=0.08, length=3.0), 0, 0.0),
+               (note("chime", "C6", 3.0, -12.0), 0.1, 0.0))
+    write("sfx/notes/r6_n7", level(fade(reverb(ship, 1.8, wet=-12.0), 0, 1.2), -25), quality=0.5)
 
 
 def build_world():
@@ -653,6 +698,18 @@ def build_world():
         4: mix(4.4, (repitch(use("tubular_C4", "transposed down 4 semitones to A-flat, faded", mono=True, end=4.0), -4), 0, -6.0),
                (phrase("harp", ["Ab4", "C5", "Eb5", "Ab5"], step=0.12, length=3.2), 0.15, 0.0),
                (use("marktree_slow_up", "0-3 s", start=0.0, end=3.0), 0.0, -12.0)),
+        # The sea door at the foot of the tower: its latch, the old door swinging, and D minor.
+        5: mix(4.4, (lowpass(use("k_latch", "door latch, low-pass 6 kHz", mono=True), 6000), 0, -8.0),
+               (fade(lowpass(repitch(use("rope", "0.2-1.8 s, transposed down 3 semitones, low-pass 3 kHz (the door swinging)",
+                                         mono=True, start=0.2, end=1.8), -3), 3000), 0.05, 0.6), 0.08, -8.0),
+               (phrase("harp", ["D5", "F5", "A5", "D6"], step=0.11, length=3.2), 0.3, 0.0),
+               (normalized(use("tubular_D4", "faded (the fog bell, far above)", mono=True, end=4.0)), 0.35, -16.0)),
+        # The ship's cabin door: its latch, two strokes of the ship's bell, and C major.
+        6: mix(4.4, (lowpass(use("k_latch", "door latch, low-pass 6 kHz", mono=True), 6000), 0, -8.0),
+               (normalized(use("tubular_C5", "two strokes (the ship's bell)", mono=True, end=3.0)), 0.2, -12.0),
+               (normalized(use("tubular_C5", "second stroke, softer", mono=True, end=3.0)), 0.55, -17.0),
+               (phrase("harp", ["C5", "E5", "G5", "C6"], step=0.1, length=3.2), 0.3, 0.0),
+               (use("marktree_slow_down", "0-2.5 s", start=0.0, end=2.5), 0.4, -14.0)),
     }
     for region, x in gates.items():
         write(f"sfx/world/gate_{region}", level(fade(reverb(x, 1.8, wet=-12.0), 0, 1.2), -23), quality=0.5)
@@ -663,6 +720,9 @@ def build_world():
         2: mix(3.4, (phrase("vibes", ["C5", "Eb5"], step=0.3, length=3.0), 0, 0.0), (note("bowed", "G3", 3.0, -12.0), 0, 0.0)),
         3: phrase("harp", ["A4", "D5", "F#5"], step=0.22, length=3.0),
         4: phrase("harp", ["C5", "G5"], step=0.4, length=3.0),
+        5: mix(3.4, (phrase("harp", ["D5", "A5"], step=0.38, length=3.0), 0, 0.0),
+               (normalized(use("tubular_D3_soft", "faded (a fog bell far off)", mono=True, end=3.0)), 0.0, -20.0)),
+        6: phrase("harp", ["G4", "C5", "E5"], step=0.22, length=3.0),
     }
     for region, x in arrivals.items():
         write(f"sfx/world/arrive_{region}", level(fade(reverb(x, 2.0, wet=-10.0), 0, 1.3), -27), quality=0.5)
@@ -706,6 +766,61 @@ def build_world():
         flame = repitch(use("torch", "transposed up 7 semitones", mono=True), 7)
         x = mix(2.6, (link_note(name), 0, 0.0), (flame, 0, -8.0))
         write(f"sfx/world/lantern_{i}", level(fade(x, 0, 1.0), -27), quality=0.5)
+    build_stair()
+    build_harbor()
+
+
+def scrape(start, length, edit, semitones):
+    """A short stretch of the slab's grinding, made smaller (higher) and band-limited."""
+    x = use("stone_slab", f"{start:.2f}-{start + length:.2f} s, transposed {semitones:+d} semitones, band-pass 150 Hz-4 kHz ({edit})",
+            mono=True, start=start, end=start + length)
+    return fade(highpass(lowpass(repitch(x, semitones), 4000), 150), 0.04, 0.12)
+
+
+def build_stair():
+    # push(): a stone grinds out of its socket in the tower wall and locks with a thud.
+    for i, (start, knock) in enumerate([(5.25, "k_thud0"), (6.05, "k_thud1")], 1):
+        thud = lowpass(trim_active(use(knock, "soft heavy thud, low-pass 1.2 kHz", mono=True), -45.0, post=0.05), 1200)
+        x = mix(1.0, (normalized(scrape(start, 0.42, "a stone sliding out", 3)), 0, 0.0), (normalized(thud), 0.32, -7.0))
+        write(f"sfx/world/stone_push_{i}", level(fade(x, 0, 0.12), -28), quality=0.5)
+    # pop(): the top stone grinds back into the wall, lower, and seats with a dull knock.
+    for i, (start, knock) in enumerate([(0.10, "k_mining0"), (2.10, "k_mining1")], 1):
+        seat = lowpass(repitch(trim_active(use(knock, "transposed down 5 semitones, low-pass 1.5 kHz (the stone seating)", mono=True),
+                                           -45.0, post=0.05), -5), 1500)
+        x = mix(1.0, (normalized(scrape(start, 0.38, "the stone sliding in", -1)), 0, 0.0), (normalized(seat), 0.34, -6.0))
+        write(f"sfx/world/stone_pop_{i}", level(fade(x, 0, 0.12), -28), quality=0.5)
+    # The bottom stone will not move: a dull knock, and grit trickling.
+    knock = lowpass(repitch(trim_active(use("k_mining2", "transposed down 6 semitones, low-pass 1.4 kHz", mono=True), -45.0, post=0.05), -6), 1400)
+    thud = lowpass(trim_active(use("k_thud2", "low-pass 900 Hz", mono=True), -45.0, post=0.05), 900)
+    grit = use("pebbles", "1.2-1.8 s, low-pass 3 kHz (grit trickling)", mono=True, start=1.2, end=1.8)
+    stuck = mix(0.9, (knock, 0, 0.0), (thud, 0.0, -3.0), (fade(lowpass(grit, 3000), 0.05, 0.3), 0.08, -14.0))
+    write("sfx/world/stone_stuck", level(fade(stuck, 0, 0.1), -29), quality=0.5)
+    # The fog bell at the top of the tower: a deep stroke, a softer second, and the fog around them.
+    strike = normalized(use("tubular_D3", "full stroke (D)", mono=True))
+    second = normalized(use("tubular_D3_soft", "softer second stroke", mono=True))
+    shine = normalized(use("tubular_D4", "an octave above, under the stroke", mono=True))
+    body = normalized(lowpass(repitch(use("gong", "0-6 s, transposed down 2 semitones, low-pass 700 Hz, under the bell", mono=True, end=6.0), -2), 700))
+    bell = mix(7.0, (strike, 0, 0.0), (shine, 0.0, -10.0), (fade(body, 0.02, 3.0), 0.0, -14.0), (second, 1.9, -4.0))
+    write("sfx/world/bell", level(fade(reverb(bell, 3.2, wet=-9.0, damp=4500.0), 0, 2.5), -23), quality=0.5)
+
+
+def stroke(start, edit, lp=6000.0):
+    """One stroke of a paddle in calm water."""
+    x = use("paddles", f"{start:.2f}-{start + 0.7:.2f} s, low-pass {lp / 1000:g} kHz ({edit})", mono=True, start=start, end=start + 0.7)
+    return fade(lowpass(x, lp), 0.01, 0.25)
+
+
+def build_harbor():
+    # enqueue(): a boat rows in to the end of the line and bumps against its post.
+    knock = lowpass(trim_active(use("k_knock0", "wooden knock, low-pass 2.5 kHz (the hull against the post)", mono=True), -45.0, post=0.05), 2500)
+    slap = lowpass(trim_active(use("puddle", "low-pass 2.5 kHz (water slapping the hull)", mono=True), -40.0), 2500)
+    arrive = mix(2.0, (normalized(stroke(16.95, "a stroke")), 0, -3.0), (normalized(stroke(18.80, "a second stroke")), 0.5, -1.0),
+                 (normalized(knock), 0.92, -2.0), (normalized(slap), 0.95, -16.0))
+    write("sfx/world/boat_arrive", level(fade(arrive, 0, 0.4), -27), quality=0.5)
+    # dequeue(): the front boat rows away, each stroke farther off.
+    leave = mix(2.6, (stroke(20.70, "a stroke", 6000), 0, 0.0), (stroke(24.33, "farther", 3500), 0.65, -5.0),
+                (stroke(26.80, "farther still", 2200), 1.3, -10.0))
+    write("sfx/world/boat_leave", level(fade(reverb(leave, 1.2, wet=-16.0), 0, 0.6), -28), quality=0.5)
 
 
 def build_journal():
@@ -769,6 +884,10 @@ def build_accents():
     write("sfx/accent/pebbles_1", level(fade(reverb(lowpass(x, 4000), 1.6, wet=-6.0), 0.02, 0.8), -33), quality=0.5)
     x = use("stones", "0.3-2.6 s, low-pass 2.5 kHz, distant room", mono=True, start=0.3, end=2.6)
     write("sfx/accent/pebbles_2", level(fade(reverb(lowpass(x, 2500), 1.8, wet=-6.0), 0.05, 1.0), -34), quality=0.5)
+    # Gulls far off over the water (for the lighthouse and the harbor).
+    for i, (key, a, b) in enumerate([("gull_pair", 0.20, 3.60), ("gull_flying", 0.50, 4.00), ("gull_call", 8.50, 10.40)], 1):
+        x = use(key, f"{a:.1f}-{b:.1f} s, band-pass 500 Hz-5 kHz, distant room", mono=True, start=a, end=b)
+        write(f"sfx/accent/gull_{i}", level(fade(reverb(highpass(lowpass(x, 5000), 500), 1.6, wet=-7.0), 0.03, 0.6), -33), quality=0.5)
 
 
 # ---------------------------------------------------------------------------
@@ -781,12 +900,12 @@ Every sound and piece of music in this folder comes from an open-license source,
 Licenses were checked on each asset's own page. The edits are listed per file below, and
 `tools/audio/build_audio.py` reproduces every file from its sources.
 
-- **Music:** four pieces by Scott Buckley, under the Creative Commons Attribution 4.0 license (CC BY 4.0). Attribution is required.
+- **Music:** six pieces by Scott Buckley, under the Creative Commons Attribution 4.0 license (CC BY 4.0). Attribution is required.
   The game also credits him on the final journal page.
 - **Everything else:** public domain (CC0 1.0). No attribution is required; the creators are credited here anyway.
   Freesound recordings were taken from the site's high-quality Ogg preview of each upload.
-- **Original arrangements:** the link notes, the chords of the gates and the journey's end, the arrival motifs, and the
-  bridge's lanterns were composed for this game and played with the CC0 instrument samples listed below.
+- **Original arrangements:** the link notes, the chords of the gates and the journey's end, the arrival motifs, the
+  bridge's lanterns, and the fog bell's strokes were composed for this game and played with the CC0 instrument samples listed below.
 - Copies of the licenses are in `licenses/`.
 
 Edits common to all files: converted to {rate} Hz, encoded as Ogg Vorbis, and set to a loudness that fits the mix.
@@ -815,7 +934,7 @@ def write_credits():
         for key, edit in uses:
             used.setdefault(key, []).append((out, edit))
     music_lines = []
-    for key in ["cobalt", "cobalt_nopiano", "hiraeth", "reverie", "hymn"]:
+    for key in ["cobalt", "cobalt_nopiano", "hiraeth", "reverie", "solace", "home_was_you", "hymn"]:
         if key in used:
             src = SOURCES[key]
             files = ", ".join(sorted({f"`{o}`" for o, _ in used[key]}))

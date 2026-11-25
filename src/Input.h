@@ -8,11 +8,13 @@ struct InputFrame {
     float move = 0.0f;            // -1 left, +1 right, 0 none
     bool jump = false;            // pressed this frame
     bool interact = false;        // E or Enter pressed this frame
+    bool lower = false;           // S or Down pressed this frame (Region 5: take the top stone off)
     bool toggleInspector = false; // Tab pressed this frame
     bool pause = false;           // Escape pressed this frame
     bool quit = false;            // Q pressed this frame
     bool replay = false;          // R pressed this frame
     bool mute = false;            // M pressed this frame: sound off or on
+    bool fullscreen = false;      // F11, or Alt+Enter, pressed this frame: fullscreen or the window
     int navX = 0;                 // pause menu: -1 left (A, Left), +1 right (D, Right), pressed or repeating
     int navY = 0;                 // pause menu: -1 up (W, Up), +1 down (S, Down)
 };
@@ -22,12 +24,15 @@ inline InputFrame readKeyboard() {
     if (IsKeyDown(KEY_A) || IsKeyDown(KEY_LEFT)) input.move -= 1.0f;
     if (IsKeyDown(KEY_D) || IsKeyDown(KEY_RIGHT)) input.move += 1.0f;
     input.jump = IsKeyPressed(KEY_SPACE);
-    input.interact = IsKeyPressed(KEY_E) || IsKeyPressed(KEY_ENTER);
+    const bool alt = IsKeyDown(KEY_LEFT_ALT) || IsKeyDown(KEY_RIGHT_ALT);
+    input.interact = IsKeyPressed(KEY_E) || (IsKeyPressed(KEY_ENTER) && !alt); // Alt+Enter is fullscreen, not interact
+    input.lower = IsKeyPressed(KEY_S) || IsKeyPressed(KEY_DOWN);
     input.toggleInspector = IsKeyPressed(KEY_TAB);
     input.pause = IsKeyPressed(KEY_ESCAPE);
     input.quit = IsKeyPressed(KEY_Q);
     input.replay = IsKeyPressed(KEY_R);
     input.mute = IsKeyPressed(KEY_M);
+    input.fullscreen = IsKeyPressed(KEY_F11) || (alt && IsKeyPressed(KEY_ENTER));
     auto tapped = [](int key) { return IsKeyPressed(key) || IsKeyPressedRepeat(key); };
     if (tapped(KEY_A) || tapped(KEY_LEFT)) input.navX -= 1;
     if (tapped(KEY_D) || tapped(KEY_RIGHT)) input.navX += 1;

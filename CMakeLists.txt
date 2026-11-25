@@ -28,6 +28,7 @@ add_executable(NodeWanderer
     src/GameScene.cpp
     src/GameUi.cpp
     src/GameSound.cpp
+    src/Display.cpp
     src/Audio.cpp
     src/Player.cpp
     src/Effects.cpp
@@ -39,9 +40,13 @@ add_executable(NodeWanderer
     src/RuinsArt.cpp
     src/GardenArt.cpp
     src/EdgeArt.cpp
+    src/LighthouseArt.cpp
+    src/HarborArt.cpp
     src/SinglyLinkedList.cpp
     src/DoublyLinkedList.cpp
     src/CircularSinglyLinkedList.cpp
+    src/LinkedStack.cpp
+    src/LinkedQueue.cpp
 )
 target_link_libraries(NodeWanderer PRIVATE raylib)
 

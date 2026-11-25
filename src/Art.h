@@ -17,9 +17,23 @@ constexpr float CANVAS_SCALE = 2.0f; // world pixels per canvas pixel
 inline int toCanvasX(float worldX, int cameraX) { return (int)std::floor(worldX / CANVAS_SCALE) - cameraX; }
 inline int toCanvasY(float worldY) { return (int)std::floor(worldY / CANVAS_SCALE); }
 
+// How long the art takes to show a node arriving or leaving in Regions 5 and 6 (the node itself
+// exists, or is gone, from the moment push, pop, enqueue, or dequeue runs).
+constexpr float STONE_SLIDE_SECONDS = 0.35f; // Region 5: a stone sliding out of the wall or back in
+constexpr float BOAT_ARRIVE_SECONDS = 1.1f;  // Region 6: a boat rowing in to the rear of the line
+constexpr float BOAT_LEAVE_SECONDS = 2.4f;   // Region 6: a boat that left the line rowing away
+
+// A platform node that was just deleted (a stone popped off the stack, a boat that left the
+// queue), kept by ID so the art can show it going. Only its rectangle is kept, never the node.
+struct RemovedPiece {
+    bool active = false;
+    Rectangle rect = {}; // where its platform was, world coordinates
+    float at = -100.0f;  // when it was removed (SceneView::time clock)
+};
+
 // What the region art needs from gameplay. Read-only, non-owning pointers only.
 struct SceneView {
-    int region;             // 0..3
+    int region;             // 0..5
     int cameraX;            // camera left edge, in canvas pixels
     int scroll;             // camera offset from the region's left edge (for parallax layers)
     const Node* head;       // platforms are drawn by walking next from the active list's head
@@ -43,6 +57,9 @@ struct SceneView {
     float bridgeProgress;   // Region 4: 0 -> 1 while the new bridge assembles
     float bridgeTime;       // Region 4: seconds since the bridge node was appended
     Rectangle hazardZone;   // Region 4: the NULL gap (world coordinates)
+    const float* createdById;          // Regions 5-6: when each node ID was created (time clock; very early = from the start)
+    const RemovedPiece* removedById;   // Regions 5-6: nodes just deleted (popped stones, boats that left), by ID
+    bool moreToCome;        // Region 6: another boat can still be called
     Vector2 playerFeet;     // the traveler's feet, canvas coordinates
     float playerSpeed;      // horizontal speed, world pixels per second (signed)
     bool playerAirborne;
@@ -108,6 +125,7 @@ struct RegionArt {
     std::vector<SwayPiece> sway;
     std::vector<LedgeArt> ledges;
     std::vector<Texture2D> extra; // region-specific pictures (props), unloaded with the rest
+    std::vector<Vector2> spots;   // region-specific places that live pieces need (region-local canvas pixels)
     int waterline = -1;           // canvas y of a reflecting water surface, or -1
 
     void clear();

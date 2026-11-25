@@ -5,8 +5,8 @@
 # The art is drawn in code, like the game: the scripts in art/ paint pixels into layers
 # and write them as SVG rectangles, with CSS and SMIL animation. Colors and the
 # traveler sprite are copied from src/ (Theme.h, the region art files, Player.cpp).
-# Pass one or more names (hero, forest, ruins, garden, edge, journal, badges, divider,
-# footer) to rebuild only those files.
+# Pass one or more names (hero, forest, ruins, garden, edge, lighthouse, harbor, journal,
+# badges, divider, footer) to rebuild only those files.
 
 param([string[]]$Only = @())
 
@@ -25,6 +25,8 @@ $targets = [ordered]@{
     ruins   = { Write-Ruins }
     garden  = { Write-Garden }
     edge    = { Write-Edge }
+    lighthouse = { Write-Lighthouse }
+    harbor  = { Write-Harbor }
     journal = { Write-Journal }
     badges  = { Write-Badges }
     divider = { Write-Divider }

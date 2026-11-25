@@ -65,8 +65,10 @@ void updatePlayerMovement(Player& player, const PhysicsSettings& settings, float
 }
 
 bool canJumpBetween(const Node& from, const Node& to, const PhysicsSettings& settings, Vector2 size) {
-    const Rectangle a = getPlatformRect(from);
-    const Rectangle b = getPlatformRect(to);
+    return canJumpBetweenRects(getPlatformRect(from), getPlatformRect(to), settings, size);
+}
+
+bool canJumpBetweenRects(Rectangle a, Rectangle b, const PhysicsSettings& settings, Vector2 size) {
     const float direction = (b.x + b.width / 2.0f >= a.x + a.width / 2.0f) ? 1.0f : -1.0f;
     const float dt = 1.0f / 60.0f;
 
@@ -74,6 +76,10 @@ bool canJumpBetween(const Node& from, const Node& to, const PhysicsSettings& set
     p.size = size;
     p.grounded = true;
     p.position = Vector2{(direction > 0.0f) ? a.x + a.width - size.x : a.x, a.y - size.y}; // standing at the edge
+    const float underTarget = b.x + b.width / 2.0f - size.x / 2.0f;
+    if (b.y < a.y && underTarget >= a.x && underTarget + size.x <= a.x + a.width) {
+        p.position.x = underTarget; // the target is right overhead: jump straight up through it (one-way platforms)
+    }
     p.velocity = Vector2{0.0f, 0.0f};
 
     for (int frame = 0; frame < 240; frame++) {

@@ -144,9 +144,20 @@ void SceneRenderer::copyCanvasToReflection() const {
     copyTarget(canvas, reflection);
 }
 
-void SceneRenderer::present(const Mood& mood, int screenWidth, int screenHeight) const {
+// Blurred copies for the bloom: each step halves the size and averages neighboring pixels.
+// These are texture passes of their own, so they run before the frame is drawn.
+void SceneRenderer::prepareBloom() const {
+    if (!postReady) return;
+    SetTextureFilter(canvas.texture, TEXTURE_FILTER_BILINEAR);
+    copyTarget(canvas, bloomHalf);
+    SetTextureFilter(canvas.texture, TEXTURE_FILTER_POINT);
+    copyTarget(bloomHalf, bloomQuarter);
+    copyTarget(bloomQuarter, bloomEighth);
+}
+
+void SceneRenderer::present(const Mood& mood, int width, int height) const {
     Rectangle source = {0.0f, 0.0f, (float)CANVAS_WIDTH, -(float)CANVAS_HEIGHT}; // render textures are stored upside down
-    Rectangle dest = {0.0f, 0.0f, (float)screenWidth, (float)screenHeight};
+    Rectangle dest = {0.0f, 0.0f, (float)width, (float)height};
     if (!postReady) {
         rlDrawRenderBatchActive();
         rlDisableColorBlend();
@@ -155,13 +166,6 @@ void SceneRenderer::present(const Mood& mood, int screenWidth, int screenHeight)
         rlEnableColorBlend();
         return;
     }
-
-    // Blurred copies for the bloom: each step halves the size and averages neighboring pixels.
-    SetTextureFilter(canvas.texture, TEXTURE_FILTER_BILINEAR);
-    copyTarget(canvas, bloomHalf);
-    SetTextureFilter(canvas.texture, TEXTURE_FILTER_POINT);
-    copyTarget(bloomHalf, bloomQuarter);
-    copyTarget(bloomQuarter, bloomEighth);
 
     float shadow[3] = {mood.shadowTint.x, mood.shadowTint.y, mood.shadowTint.z};
     float highlight[3] = {mood.highlightTint.x, mood.highlightTint.y, mood.highlightTint.z};

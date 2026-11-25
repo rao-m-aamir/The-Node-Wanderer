@@ -9,9 +9,9 @@
 
 namespace {
 
-const Track REGION_TRACKS[REGION_COUNT] = {Track::Forest, Track::Ruins, Track::Garden, Track::Edge};
-const Bed REGION_BEDS[REGION_COUNT] = {Bed::Forest, Bed::Ruins, Bed::Garden, Bed::EdgeWind};
-const Sfx ARRIVALS[REGION_COUNT] = {Sfx::Arrive1, Sfx::Arrive2, Sfx::Arrive3, Sfx::Arrive4};
+const Track REGION_TRACKS[REGION_COUNT] = {Track::Forest, Track::Ruins, Track::Garden, Track::Edge, Track::Lighthouse, Track::Harbor};
+const Bed REGION_BEDS[REGION_COUNT] = {Bed::Forest, Bed::Ruins, Bed::Garden, Bed::EdgeWind, Bed::Lighthouse, Bed::Harbor};
+const Sfx ARRIVALS[REGION_COUNT] = {Sfx::Arrive1, Sfx::Arrive2, Sfx::Arrive3, Sfx::Arrive4, Sfx::Arrive5, Sfx::Arrive6};
 
 } // namespace
 
@@ -33,8 +33,8 @@ void Game::updateAudioMix(float dt) {
     if (state == GameState::Paused) {
         music = 0.35f;
         beds = 0.3f;
-        if (audioRowFlash > 0.0f && audioRow == 0) music = 1.0f; // while a level changes, play it at that level
-        if (audioRowFlash > 0.0f && audioRow == 1) beds = 1.0f;
+        if (audioRowFlash > 0.0f && settingsRow == 0) music = 1.0f; // while a level changes, play it at that level
+        if (audioRowFlash > 0.0f && settingsRow == 1) beds = 1.0f;
     } else if (state == GameState::Message) {
         music = 0.72f;
         beds = 0.85f;
@@ -66,20 +66,16 @@ void Game::updateAudioMix(float dt) {
     if (audioRowFlash > 0.0f) audioRowFlash -= dt;
 }
 
-// The pause screen's sound panel: up and down choose a row, left and right change it.
+// The pause screen's sound rows (see updatePauseSettings): left and right change them.
 void Game::updatePauseAudioPanel(const InputFrame& input) {
-    if (input.navY != 0) {
-        audioRow = (audioRow + input.navY + 3) % 3;
-        audio.play(Sfx::Tick, 0.8f);
-    }
     const AudioSettings& s = audio.settings();
-    if (audioRow == 2) {
+    if (settingsRow == 2) {
         if (input.navX != 0 || input.interact) toggleMute();
         return;
     }
     if (input.navX == 0) return;
     float step = 0.1f * (float)input.navX;
-    if (audioRow == 0) {
+    if (settingsRow == 0) {
         audio.setMusicVolume(s.music + step);
     } else {
         audio.setSoundVolume(s.sounds + step);
@@ -134,11 +130,15 @@ Surface Game::surfaceUnderfoot() const {
             if (id == 3) return Surface::Earth;
             if (id == 4) return Surface::Wood;
             return Surface::Stone;
-        default: // the lookout, the rope post's rock, the cliff's edge, the new bridge
+        case 3: // the lookout, the rope post's rock, the cliff's edge, the new bridge
             if (id == 2) return Surface::Stone;
             if (id == 3) return Surface::Earth;
             if (id == 4) return Surface::Wood;
             return Surface::Grass;
+        case 4: // the floor stone by the sea is wet; the stair stones are dry sandstone
+            return (id == 1) ? Surface::WetStone : Surface::Stone;
+        default: // the boats' decks, and the ship's
+            return Surface::Wood;
     }
 }
 

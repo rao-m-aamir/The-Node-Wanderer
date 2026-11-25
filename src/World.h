@@ -5,16 +5,18 @@
 #include "SinglyLinkedList.h"
 #include "DoublyLinkedList.h"
 #include "CircularSinglyLinkedList.h"
+#include "LinkedQueue.h"
+#include "LinkedStack.h"
 
 // Which kind of list a region is built from.
-enum class ListKind { Singly, Doubly, Circular };
+enum class ListKind { Singly, Doubly, Circular, Stack, Queue };
 
 // Safety bound for every loop that walks a region's list.
 // No region has this many nodes, so reaching it means a link is broken.
 constexpr int MAX_NODES_PER_REGION = 16;
 
-constexpr int REGION_COUNT = 4;
-constexpr float WORLD_WIDTH = 6800.0f;
+constexpr int REGION_COUNT = 6;
+constexpr float WORLD_WIDTH = 10000.0f;
 constexpr float WORLD_KILL_Y = 760.0f; // falling below this line triggers recovery
 
 // Fixed description of one region. This is UI and layout data only:
@@ -27,16 +29,17 @@ struct RegionInfo {
     float right;
     Node* gateNode;  // NON-OWNING: the node the exit gate stands on (nullptr = no gate yet)
     bool gateOnLeft; // gate on the left or right end of that platform
-    float waterline; // world y of standing water (Region 2's flooded halls), or 0 for none
+    float waterline; // world y of water the traveler can fall into (splash), or 0 for none
 };
 
 // TRAVERSAL RULE A (link-gated solidity):
 // a platform is solid only if it is the current node, or the node that one of
-// the current node's permitted links points to. Collision and drawing both
-// use this one function, so what you see is what the links allow.
-bool isPlatformSolid(const Node* current, const Node* candidate, ListKind kind);
+// the current node's permitted links points to. A stack only lets you reach its
+// top, so there the top (the list's head) is the one other solid platform.
+// Collision and drawing both use this one function, so what you see is what the links allow.
+bool isPlatformSolid(const Node* current, const Node* candidate, ListKind kind, const Node* head);
 
-// Owns the four region lists for the whole stage.
+// Owns the six region lists for the whole stage.
 class World {
 public:
     World() = default;
@@ -64,19 +67,37 @@ public:
     Node* appendBridgeNode(); // calls append() on Region 4's list
     Rectangle getBridgeRect() const; // layout only: where append() puts the bridge (the art paints its far landing)
 
+    // Region 5: the stack of stair stones on the lighthouse. The floor stone at the tower's foot
+    // is the bottom; push() sets the next stone on top, pop() takes the top one off.
+    static constexpr int STONE_SLOTS = 5;      // the floor stone and four stair stones
+    Node* pushStone();                         // nullptr when the stair already reaches the bell
+    bool popStone();                           // false at the floor stone: it is the bottom (its next is NULL)
+    Rectangle getStoneSlot(int id) const;      // layout only: where push() puts the stone with this ID
+
+    // Region 6: the queue of boats in the harbor. Each new boat joins the rear; the front one leaves.
+    static constexpr int BOAT_SLOTS = 7;       // six boats, then the ship
+    Node* enqueueBoat();                       // nullptr when the ship has already come
+    bool dequeueBoat();
+    bool boatsRemain() const;
+    Node* getQueueRear() const;
+    Rectangle getBoatSlot(int id) const;       // layout only: where the boat with this ID moors
+
     // Returns false if the region has no gate yet.
     bool getGateRect(int regionIndex, Rectangle& outRect) const;
 
 private:
     void verifyLinks() const;
 
-    // The four owning lists. Every platform in the game is a node in one of these.
+    // The six owning lists. Every platform in the game is a node in one of these.
     SinglyLinkedList forwardList;       // Region 1
     DoublyLinkedList twoWayList;        // Region 2
     CircularSinglyLinkedList loopList;  // Region 3
     SinglyLinkedList nullList;          // Region 4
+    LinkedStack stoneStack;             // Region 5
+    LinkedQueue boatQueue;              // Region 6
 
     RegionInfo regions[REGION_COUNT] = {};
     bool bridgeBuilt = false;
     Rectangle nullGap = {}; // Region 4: the gap after N3, measured once when the list is built
+    int nextBoatId = 1;     // Region 6: the next boat to call (BOAT_SLOTS + 1 once the ship has come)
 };

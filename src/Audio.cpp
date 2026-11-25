@@ -9,14 +9,16 @@
 namespace {
 
 const char* const TRACK_FILES[(int)Track::Count] = {
-    "music/forest.ogg", "music/ruins.ogg", "music/garden.ogg", "music/edge.ogg", "music/dawn.ogg", "music/finale.ogg",
+    "music/forest.ogg", "music/ruins.ogg", "music/garden.ogg", "music/edge.ogg", "music/dawn.ogg",
+    "music/lighthouse.ogg", "music/harbor.ogg", "music/finale.ogg",
 };
 
 const char* const BED_FILES[(int)Bed::Count] = {
     "ambience/forest.ogg", "ambience/ruins.ogg", "ambience/garden.ogg",
     "ambience/edge_wind.ogg", "ambience/edge_gap.ogg", "ambience/edge_dawn.ogg",
+    "ambience/lighthouse.ogg", "ambience/harbor.ogg",
 };
-const float BED_GAIN[(int)Bed::Count] = {1.26f, 1.33f, 1.2f, 1.12f, 1.4f, 1.2f}; // about 8 dB under the music
+const float BED_GAIN[(int)Bed::Count] = {1.26f, 1.33f, 1.2f, 1.12f, 1.4f, 1.2f, 1.2f, 1.2f}; // about 8 dB under the music
 
 struct EffectInfo {
     const char* name;  // file base under assets/audio, and the name in debug logs
@@ -46,10 +48,14 @@ const EffectInfo EFFECTS[(int)Sfx::Count] = {
     {"sfx/world/gate_2", 1.25f, 0.6f, false, 3},
     {"sfx/world/gate_3", 1.25f, 0.6f, false, 3},
     {"sfx/world/gate_4", 1.25f, 0.6f, false, 3},
+    {"sfx/world/gate_5", 1.25f, 0.6f, false, 3},
+    {"sfx/world/gate_6", 1.25f, 0.6f, false, 3},
     {"sfx/world/arrive_1", 0.9f, 0.6f, false, 3},
     {"sfx/world/arrive_2", 0.9f, 0.6f, false, 3},
     {"sfx/world/arrive_3", 0.9f, 0.6f, false, 3},
     {"sfx/world/arrive_4", 0.9f, 0.6f, false, 3},
+    {"sfx/world/arrive_5", 0.9f, 0.6f, false, 3},
+    {"sfx/world/arrive_6", 0.9f, 0.6f, false, 3},
     {"sfx/world/edge_gust", 1.0f, 0.6f, false, 3},
     {"sfx/world/hazard", 1.15f, 0.6f, false, 3},
     {"sfx/world/repair", 1.4f, 0.6f, false, 3},
@@ -59,6 +65,12 @@ const EffectInfo EFFECTS[(int)Sfx::Count] = {
     {"sfx/world/lantern_1", 1.1f, 0.2f, false, 3},
     {"sfx/world/lantern_2", 1.1f, 0.2f, false, 3},
     {"sfx/world/lantern_3", 1.1f, 0.2f, false, 3},
+    {"sfx/world/stone_push", 1.0f, 0.12f, false, 2},
+    {"sfx/world/stone_pop", 1.0f, 0.12f, false, 2},
+    {"sfx/world/stone_stuck", 0.9f, 0.3f, false, 2},
+    {"sfx/world/bell", 1.25f, 1.0f, false, 3},
+    {"sfx/world/boat_arrive", 1.0f, 0.15f, false, 2},
+    {"sfx/world/boat_leave", 0.95f, 0.15f, false, 2},
     {"sfx/journal/open", 1.05f, 0.05f, true, 3},
     {"sfx/journal/close", 1.05f, 0.05f, true, 3},
     {"sfx/journal/page", 1.05f, 0.05f, true, 3},
@@ -73,6 +85,7 @@ const EffectInfo EFFECTS[(int)Sfx::Count] = {
     {"sfx/accent/chime", 1.25f, 1.0f, false, 0},
     {"sfx/accent/creak", 1.0f, 1.0f, false, 0},
     {"sfx/accent/pebbles", 1.25f, 1.0f, false, 0},
+    {"sfx/accent/gull", 1.1f, 1.0f, false, 0},
 };
 const char* const STEP_FILES[(int)Surface::Count] = {
     "sfx/step/grass", "sfx/step/earth", "sfx/step/stone", "sfx/step/wet", "sfx/step/wood", "sfx/step/soft",
@@ -172,13 +185,13 @@ void GameAudio::load() {
     // ringing is not cut off when it plays again; notes ring longest and get two.
     for (int i = 0; i < (int)Sfx::Count; i++) loadEffect(effects[i], EFFECTS[i].name, 1);
     for (int i = 0; i < (int)Surface::Count; i++) loadEffect(steps[i], STEP_FILES[i], 1);
-    for (int region = 1; region <= 4; region++) {
-        for (int id = 1; id <= 5; id++) {
+    for (int region = 1; region <= NOTE_REGIONS; region++) {
+        for (int id = 1; id < NOTE_IDS; id++) {
             std::string base = TextFormat("sfx/notes/r%d_n%d", region, id);
             if (FileExists((root + base + ".ogg").c_str())) loadEffect(notes[region - 1][id], base, 2);
         }
     }
-    for (int id = 1; id <= 5; id++) {
+    for (int id = 1; id < NOTE_IDS; id++) {
         std::string base = TextFormat("sfx/notes/r2_back_n%d", id);
         if (FileExists((root + base + ".ogg").c_str())) loadEffect(backNotes[id], base, 2);
     }
@@ -277,6 +290,7 @@ void GameAudio::unload() {
     g_masterGain = 1.0f; // detached: the audio thread no longer touches it
     voices.clear();
     pending.clear();
+    pendingNotes.clear();
     accents.clear();
     ready = false;
 }
@@ -307,6 +321,17 @@ void GameAudio::update(float dt, bool worldRunning) {
                 pending[i] = pending.back();
                 pending.pop_back();
                 play(p.sfx, p.gain, p.pitch, p.side);
+            } else {
+                i++;
+            }
+        }
+        for (size_t i = 0; i < pendingNotes.size();) { // scheduled link notes (a boat mooring, a boat leaving)
+            pendingNotes[i].wait -= dt;
+            if (pendingNotes[i].wait <= 0.0f) {
+                PendingNote n = pendingNotes[i];
+                pendingNotes[i] = pendingNotes.back();
+                pendingNotes.pop_back();
+                playNote(n.region, n.nodeId, n.previous, n.side);
             } else {
                 i++;
             }
@@ -513,11 +538,19 @@ void GameAudio::playStep(Surface surface, float gain, float side) {
           false, STEP_FILES[(int)surface]);
 }
 
-void GameAudio::playNote(int region, int nodeId, bool previous, float side) {
-    if (!ready || region < 0 || region > 3 || nodeId < 1 || nodeId > 5) return;
-    Effect& effect = previous ? backNotes[nodeId] : notes[region][nodeId];
+void GameAudio::playNote(int region, int nodeId, bool previous, float side, float delay) {
+    if (!ready || region < 0 || region >= NOTE_REGIONS || nodeId < 1 || nodeId >= NOTE_IDS) return;
+    if (delay > 0.0f) {
+        pendingNotes.push_back(PendingNote{region, nodeId, previous, side, delay});
+        return;
+    }
+    // On the stair and in the harbor, a stone or a boat that leaves plays the note it came with,
+    // softer: the stair's tune comes back reversed (last in, first out), the harbor's in order.
+    const bool leaving = previous && region >= 4;
+    Effect& effect = (previous && !leaving) ? backNotes[nodeId] : notes[region][nodeId];
     // Notes are in the key of the place's music, so they are never detuned.
-    start(effect, NOTE_GAIN, 1.0f, side, false, TextFormat("note r%d n%d%s", region + 1, nodeId, previous ? " (previous)" : ""));
+    start(effect, NOTE_GAIN * (leaving ? 0.6f : 1.0f), 1.0f, side, false,
+          TextFormat("note r%d n%d%s", region + 1, nodeId, previous ? (leaving ? " (leaving)" : " (previous)") : ""));
 }
 
 void GameAudio::setAccents(int region, bool calm) {
@@ -529,6 +562,13 @@ void GameAudio::setAccents(int region, bool calm) {
             break;
         case 2: // single chimes in the night garden (in its key, so never detuned)
             accents.push_back(Accent{Sfx::Chime, 8.0f, 18.0f, 0.5f, 0.9f, 1.0f, 1.0f, 0.0f});
+            break;
+        case 4: // gulls wheeling around the lighthouse
+            accents.push_back(Accent{Sfx::Gull, 9.0f, 22.0f, 0.35f, 0.7f, 0.94f, 1.06f, 0.0f});
+            break;
+        case 5: // gulls over the harbor, and the moored boats creaking
+            accents.push_back(Accent{Sfx::Gull, 7.0f, 17.0f, 0.4f, 0.8f, 0.94f, 1.08f, 0.0f});
+            accents.push_back(Accent{Sfx::Creak, 11.0f, 24.0f, 0.25f, 0.5f, 0.85f, 1.0f, 0.0f});
             break;
         case 3: // ropes and loose stones on the cliffs; fewer once the bridge holds
             if (calm) {
@@ -560,6 +600,7 @@ void GameAudio::resumeWorld() {
 
 void GameAudio::cancelPending() {
     pending.clear();
+    pendingNotes.clear();
 }
 
 // ---------------------------------------------------------------------------

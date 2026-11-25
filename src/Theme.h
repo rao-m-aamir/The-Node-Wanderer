@@ -10,11 +10,13 @@ struct RegionStyle {
     Color ink;
 };
 
-inline const RegionStyle REGION_STYLES[4] = {
+inline const RegionStyle REGION_STYLES[6] = {
     {{150, 220, 110, 255}, {46, 108, 52, 255}},  // Region 1: forest green
     {{130, 190, 255, 255}, {40, 82, 150, 255}},  // Region 2: moonlit blue
     {{190, 160, 255, 255}, {98, 64, 160, 255}},  // Region 3: garden violet
     {{255, 186, 80, 255}, {158, 94, 18, 255}},   // Region 4: dawn amber
+    {{255, 150, 128, 255}, {170, 62, 50, 255}},  // Region 5: lighthouse red
+    {{96, 220, 204, 255}, {18, 116, 112, 255}},  // Region 6: harbor teal
 };
 
 // Dark cards for the in-play HUD (they lean slightly green so they sit well in every scene).

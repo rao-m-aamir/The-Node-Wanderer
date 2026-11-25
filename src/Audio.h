@@ -10,20 +10,21 @@
 // without the files in assets/audio, every call does nothing and the game plays on in silence.
 // Gameplay calls this from its event handlers; drawing code only reads settings().
 
-enum class Track { Forest, Ruins, Garden, Edge, Dawn, Finale, Count };        // music loops
-enum class Bed { Forest, Ruins, Garden, EdgeWind, EdgeGap, EdgeDawn, Count }; // ambience loops
+enum class Track { Forest, Ruins, Garden, Edge, Dawn, Lighthouse, Harbor, Finale, Count };          // music loops
+enum class Bed { Forest, Ruins, Garden, EdgeWind, EdgeGap, EdgeDawn, Lighthouse, Harbor, Count }; // ambience loops
 enum class Surface { Grass, Earth, Stone, WetStone, Wood, Soft, Count };      // what a footstep sounds like
 
 enum class Sfx {
     // The traveler and the world
     Jump, Land, Splash, Fall, Recover,
     Passage, Key, Brazier, Checkpoint, Exit, Complete,
-    Gate1, Gate2, Gate3, Gate4, Arrive1, Arrive2, Arrive3, Arrive4,
+    Gate1, Gate2, Gate3, Gate4, Gate5, Gate6, Arrive1, Arrive2, Arrive3, Arrive4, Arrive5, Arrive6,
     EdgeGust, Hazard, Repair, Plank, Pier, Rope, Lantern1, Lantern2, Lantern3,
+    StonePush, StonePop, StoneStuck, Bell, BoatArrive, BoatLeave,
     // The field journal and the interface (these keep playing while the world is paused)
     JournalOpen, JournalClose, Page, NoteOpen, NoteDismiss, Callout, CoverOpen, CoverClose, Tick, Toggle,
     // Random sounds of a place (see setAccents)
-    Drip, Chime, Creak, Pebbles,
+    Drip, Chime, Creak, Pebbles, Gull,
     Count
 };
 
@@ -57,7 +58,9 @@ public:
     // schedules it; delays only count down while the world is running.
     void play(Sfx sfx, float gain = 1.0f, float pitch = 1.0f, float side = 0.0f, float delay = 0.0f);
     void playStep(Surface surface, float gain, float side);
-    void playNote(int region, int nodeId, bool previous, float side); // the note of the link just followed
+    // The note of the link just followed (regions 0..5). `previous` is the way back in Region 2; on
+    // the stair and in the harbor it is the same note again, quieter, as a stone or a boat leaves.
+    void playNote(int region, int nodeId, bool previous, float side, float delay = 0.0f);
     void setAccents(int region, bool calm = false); // the place's random sounds; region -1 stops them
     void pauseWorld();    // the world's sounds glide down and wait; interface sounds play on
     void resumeWorld();
@@ -98,6 +101,11 @@ private:
         Sfx sfx;
         float gain, pitch, side, wait;
     };
+    struct PendingNote {
+        int region, nodeId;
+        bool previous;
+        float side, wait;
+    };
     struct Accent {
         Sfx sfx;
         float minGap, maxGap, gainLow, gainHigh, pitchLow, pitchHigh;
@@ -123,10 +131,13 @@ private:
     Stream beds[(int)Bed::Count];
     Effect effects[(int)Sfx::Count];
     Effect steps[(int)Surface::Count];
-    Effect notes[4][6];   // [region][node id]: arriving through next
-    Effect backNotes[6];  // Region 2: arriving through previous
+    static constexpr int NOTE_REGIONS = 6;
+    static constexpr int NOTE_IDS = 9;
+    Effect notes[NOTE_REGIONS][NOTE_IDS]; // [region][node id]: arriving through next (or pushed, or called)
+    Effect backNotes[NOTE_IDS];           // Region 2: arriving through previous
     std::vector<Voice> voices;
     std::vector<Pending> pending;
+    std::vector<PendingNote> pendingNotes;
     std::vector<Accent> accents;
     float clock = 0.0f;
     float duckMusic = 1.0f, duckMusicTarget = 1.0f;

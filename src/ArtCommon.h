@@ -65,6 +65,8 @@ extern const RegionPainter FOREST_PAINTER;
 extern const RegionPainter RUINS_PAINTER;
 extern const RegionPainter GARDEN_PAINTER;
 extern const RegionPainter EDGE_PAINTER;
+extern const RegionPainter LIGHTHOUSE_PAINTER;
+extern const RegionPainter HARBOR_PAINTER;
 
 // ---------------------------------------------------------------------------
 // Baking (when a region is entered)
@@ -95,6 +97,10 @@ struct LedgeCanvas {
 };
 LedgeCanvas makeLedgeCanvas(const Node& node, int margin, int above);
 void storeLedge(RegionArt& art, const Node& node, const LedgeCanvas& canvas);
+// A platform picture stored by node ID before its node exists (Regions 5 and 6 create nodes while
+// you play; their pictures are painted ahead from the same layout World uses for those nodes).
+void storeLedgeById(RegionArt& art, int nodeId, const LedgeCanvas& canvas);
+const LedgeArt* findLedgeArt(const RegionArt& art, int nodeId);
 void storeLayer(RegionArt& art, const Picture& picture, float parallax, int y, bool front = false);
 void storeEmptyLayer(RegionArt& art, float parallax, bool front = false); // a layer that only holds sway pieces
 void storeSway(RegionArt& art, const Picture& piece, int layer, bool front, float x, float y, float sway, bool hangs,
